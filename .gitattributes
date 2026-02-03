@@ -1,0 +1,2 @@
+Content/Assets/FabObjects/**/*.uasset filter=lfs diff=lfs merge=lfs -text
+Content/Assets/FabObjects/*.uasset filter=lfs diff=lfs merge=lfs -text
