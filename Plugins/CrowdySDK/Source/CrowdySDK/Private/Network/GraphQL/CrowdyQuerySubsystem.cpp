@@ -392,72 +392,110 @@ void UCrowdyQuerySubsystem::ParseAndDispatchToServices(const FString& ResponseCo
 		}
 
 		const FString CleanMsg = ErrorMessages[0].TrimStartAndEnd();
-
+		
+		TSharedPtr<ICrowdyQueryResponse> Response;
+		
 		// Dispatch to the appropriate service based on an error type
 		switch (ErrorResponseType)
 		{
 		case EQueryResponseType::Login:
 			{
-				const TSharedPtr<FLoginResponse> LoginResponse;
+				const TSharedPtr<FLoginResponse> LoginResponse = MakeShared<FLoginResponse>();
 				LoginResponse->ParseResponse(ParsedData);
-				// Pass To Service Handler
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(LoginResponse);
 				break;
 			}
 		case EQueryResponseType::Register:
 			{
-				const TSharedPtr<FRegisterResponse> RegisterResponse;
+				const TSharedPtr<FRegisterResponse> RegisterResponse = MakeShared<FRegisterResponse>();
 				RegisterResponse->ParseResponse(ParsedData);
-				// Pass to Service Handler
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(RegisterResponse);
 				break;
 			}
 		case EQueryResponseType::UDP_Info:
 			{
-				const TSharedPtr<FUDPAddressNotify> UDPInfoResponse;
+				const TSharedPtr<FUDPAddressNotify> UDPInfoResponse = MakeShared<FUDPAddressNotify>();
 				if (CleanMsg.Contains(TEXT("Insufficient"), ESearchCase::IgnoreCase))
 				{
 					UDPInfoResponse->bGateKeep = true;
 				}
-				if (UDPInfoResponse.IsValid())
-				{
-					UDPInfoResponse->ParseResponse(ParsedData);
-				}
-				// Pass to Handler
+				
+				UDPInfoResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UDPInfoResponse);
 				break;
 			}
 
-		case EQueryResponseType::UpdateChunk: break;
-		case EQueryResponseType::GetChunkByDistance: break;
-		case EQueryResponseType::CreateAvatar: break;
-		case EQueryResponseType::MyAvatars: break;
-		case EQueryResponseType::UpdateAvatar: break;
-		case EQueryResponseType::UpdateAvatarState: break;
+		case EQueryResponseType::UpdateChunk:
+			{
+				const TSharedPtr<FUpdateChunkResponse> UpdateChunkResponse = MakeShared<FUpdateChunkResponse>();
+				UpdateChunkResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateChunkResponse);
+				break;
+			}
+		case EQueryResponseType::GetChunkByDistance:
+			{
+				const TSharedPtr<FGetChunkResponse> GetChunkResponse = MakeShared<FGetChunkResponse>();
+				GetChunkResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(GetChunkResponse);
+				break;
+			}
+		case EQueryResponseType::CreateAvatar:
+			{
+				const TSharedPtr<FAvatarCreateResponse> CreateAvatarResponse = MakeShared<FAvatarCreateResponse>();
+				CreateAvatarResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(CreateAvatarResponse);
+				break;
+			}
+		case EQueryResponseType::MyAvatars:
+			{
+				const TSharedPtr<FFetchAvatarsResponse> MyAvatarsResponse = MakeShared<FFetchAvatarsResponse>();
+				MyAvatarsResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(MyAvatarsResponse);
+				break;
+			}
+		case EQueryResponseType::UpdateAvatar:
+			{
+				const TSharedPtr<FAvatarNameUpdateResponse> UpdateAvatarResponse = MakeShared<FAvatarNameUpdateResponse>();
+				UpdateAvatarResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarResponse);
+				break;
+			}
+		case EQueryResponseType::UpdateAvatarState:
+			{
+				const TSharedPtr<FAvatarStateUpdateResponse> UpdateAvatarStateResponse = MakeShared<FAvatarStateUpdateResponse>();
+				UpdateAvatarStateResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarStateResponse);
+				break;	
+			}
 		case EQueryResponseType::TeleportRequest:
 			{
-				const TSharedPtr<FTeleportResponse> TeleportResponse;
+				const TSharedPtr<FTeleportResponse> TeleportResponse = MakeShared<FTeleportResponse>();
 				TeleportResponse->ParseResponse(ParsedData);
-				// Pass to handler
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(TeleportResponse);
 				break;
 			}
 
 		case EQueryResponseType::UpdateUserState:
 			{
-				//UE_LOG(LogGraphQLService, Error, TEXT("UpdateUserState error reponse received!"));
-				//UserStateService->HandleUpdateUserStateResponse(ParsedData);
+				const TSharedPtr<FUpdateUserStateResponse> UserStateResponse = MakeShared<FUpdateUserStateResponse>();
+				UserStateResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
 				break;
 			}
 
 		case EQueryResponseType::GetUserState:
 			{
-				//UE_LOG(LogGraphQLService, Error, TEXT("GetUserState error reponse received!"));
-				//UserStateService->HandleGetUserStateResponse(ParsedData);
+				const TSharedPtr<FGetUserStateResponse> UserStateResponse = MakeShared<FGetUserStateResponse>();
+				UserStateResponse->ParseResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
 				break;
 			}
 
 		case ListVoxelUpdatesByDistance:
 			{
-				const TSharedPtr<FVoxelListByDistanceResponse> VoxelListByDistanceResponse;
+				const TSharedPtr<FVoxelListByDistanceResponse> VoxelListByDistanceResponse = MakeShared<FVoxelListByDistanceResponse>();
 				VoxelListByDistanceResponse->ParseResponse(ParsedData);
-				//VoxelService->HandleVoxelListByDistanceResponse(ParsedData);
+				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(VoxelListByDistanceResponse);
 				break;
 			}
 
@@ -466,7 +504,9 @@ void UCrowdyQuerySubsystem::ParseAndDispatchToServices(const FString& ResponseCo
 			       static_cast<int32>(ErrorResponseType));
 			break;
 		}
-
+	
+		DataRegistry->DispatchResponse(Response);
+		
 		return; // Exit early since we handled the error
 	}
 

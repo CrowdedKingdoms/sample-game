@@ -23,49 +23,8 @@
  */
 struct FActorUpdateRequestMessage : ICrowdyMessage
 {
-	
-	/**
-	 * A unique identifier representing the current map in the game environment.
-	 *
-	 * This value is typically used to distinguish between different maps or levels
-	 * within a game session. It is set dynamically and used in operations such as
-	 * serialization, deserialization, and communication with external systems like
-	 * the CrowdySDK.
-	 *
-	 * MapID is integral in ensuring that updates or requests are correctly associated
-	 * with the corresponding map context in distributed or multiplayer scenarios.
-	 */
-	int64 MapID;
-	/**
-	 * Represents the X-coordinate of a chunk in a 3D grid-based system.
-	 * Used in conjunction with ChunkY and ChunkZ to define the location
-	 * of a chunk within the grid. Commonly used in actor update
-	 * requests or related serialization and deserialization for network
-	 * message handling.
-	 */
-	int64 ChunkX, ChunkY, ChunkZ;
-	
-	/**
-	 * Holds the unique identifier for an actor.
-	 *
-	 * This variable represents the UUID (Universally Unique Identifier) assigned to an actor.
-	 * It is used to uniquely identify an actor across various processes and systems.
-	 * The UUID is serialized and transmitted as part of actor-related network messages,
-	 * ensuring consistent identification regardless of location or context.
-	 */
-	FString ActorUUID;
-	
-	/**
-	 * Represents the state of an actor in the system.
-	 *
-	 * This variable is an instance of the FActorState structure, which contains
-	 * key information about the actor, such as its position, version, and other
-	 * properties. The state is used to represent and update the actor's current
-	 * attributes within the game or simulation environment.
-	 */
 	int32 StateSize;
 	TArray<uint8> StateBytes;
-	
 	
 	/**
 	 * Retrieves the type of the message.
@@ -101,17 +60,8 @@ struct FActorUpdateRequestMessage : ICrowdyMessage
 	 */
 	virtual TArray<uint8> Serialize() const override
 	{
-		TArray<uint8> Data;
-		Data.Reserve(sizeof(int64) * 4 + 32 + 88 + 1);
+		TArray<uint8> Data = SerializeMetadata();
 		
-		Data.Add(static_cast<uint32>(GetType()) & 0xFF);
-		Data.Append(USerializationFunctionLibrary::SerializeValue(MapID));
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkX));
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkY));
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkZ));
-
-		const FTCHARToUTF8 ConvertedUUID(*ActorUUID);
-		Data.Append(reinterpret_cast<const uint8*>(ConvertedUUID.Get()), ConvertedUUID.Length());
 		Data.Append(USerializationFunctionLibrary::SerializeValue(StateSize));
 		Data.Append(StateBytes);
 
@@ -126,30 +76,10 @@ struct FActorUpdateRequestMessage : ICrowdyMessage
 	 *
 	 * @param Data The binary array containing the serialized data to be deserialized.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		UE_LOG(LogTemp, Warning, TEXT("FActorUpdateRequestMessage::Deserialize called, but should not be used."));
-
-#if WITH_EDITOR
-		
-		int32 Offset = 0;
-		int64 MapID_Lcl;
-		int64 ChunkX_Lcl, ChunkY_Lcl, ChunkZ_Lcl;
-
-		USerializationFunctionLibrary::DeserializeValue(Data, MapID_Lcl, Offset);
-		Offset += sizeof(MapID);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkX_Lcl, Offset);
-		Offset += sizeof(ChunkX);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkY_Lcl, Offset);
-		Offset += sizeof(ChunkY);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ_Lcl, Offset);
-		Offset += sizeof(ChunkZ);
-		FString ActorUUID_Lcl = USerializationFunctionLibrary::DeserializeString(Data, Offset, 32);
-		Offset += 32;
-		FActorState State_Lcl = FActorState().DeserializeActorState(Data, Offset);
-
-		UE_LOG(LogTemp, Log, TEXT("MapID: %lld\nChunk %lld %lld %lld\n"), MapID_Lcl, ChunkX_Lcl, ChunkY_Lcl, ChunkZ_Lcl);
-#endif
+		return false;
 	}
 
 	/**
@@ -171,6 +101,5 @@ struct FActorUpdateRequestMessage : ICrowdyMessage
 		// Message Type + 4 int64 + UUID + Actor State
 		return 1 + sizeof(int64) * 4 + 32 + sizeof(FActorState);
 	}
-
 	
 };

@@ -46,13 +46,28 @@ struct FUDPNetworkStatistics
 	UPROPERTY(BlueprintReadOnly, Category = "Network Stats")
 	float SendRecvRatio = 0.0f;
 	
+	UPROPERTY(BlueprintReadOnly, Category = "Network Stats")
+	int32 TotalClientNotifiesSent = 0;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Network Stats")
+	int32 TotalClientNotifiesReceived = 0;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Network Stats", meta=(DisplayName="Dropped Client Notifies"))
+	int32 TotalPendingClientNotifies = 0;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Network Stats", meta=(DisplayName="Client Notify Loss Percentage"))
+	float ClientNotifyLossPercentage = 0.0f;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Network Stats")
+	int64 Ping = 0;
+	
 };
 
 
 /**
  * 
  */
-UCLASS()
+UCLASS(meta=(DisplayName="Crowdy UDP Subsystem"))
 class CROWDYSDK_API UCrowdyUDPSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
@@ -77,17 +92,26 @@ public:
 	
 	void OnMessageReceived();
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Network|UDP|Stats")
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Network|UDP|Stats", meta=(DisplayName="Get UDP Network Stats"))
 	FUDPNetworkStatistics GetUDPNetworkStats() const;
+	
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Network|UDP|Stats", meta=(DisplayName="Reset UDP Network Stats"))
+	void ResetUDPNetworkStats();
 	
 	// Call this where the parsing happens
 	void IncrementReceivedMessageCount();
 
 	void ToggleUdpEvents(bool bAllow);
 	
+	void IncrementTotalClientNotifiesReceived();
+	
+	void UpdatePingTime(const int64 NewPingTime);
+	
 private:
 	
 	friend class UCrowdySDKSubsystem;
+	
+	std::atomic<bool> bIsShuttingDown { false };
 	
 	// UDP Operations
 	std::atomic<bool> bUDPReady = false;
@@ -108,6 +132,9 @@ private:
 	std::atomic<int32> SentDatagramsThisSecond = 0;
 	std::atomic<int32> MessagesReceivedThisSecond = 0;
 	std::atomic<int32> MessagesSentThisSecond = 0;
+	std::atomic<int32> TotalClientNotifiesSent = 0;
+	std::atomic<int32> TotalClientNotifiesReceived = 0;
+	std::atomic<int64> PingTime = 0;
 	
 	// Snapshot values for displaying
 	int32 LastSecondReceivedBytes = 0;

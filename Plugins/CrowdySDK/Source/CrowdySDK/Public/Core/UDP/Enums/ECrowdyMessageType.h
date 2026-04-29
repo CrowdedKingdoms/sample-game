@@ -33,20 +33,26 @@ UENUM(BlueprintType)
 enum class ECrowdyMessageType : uint8
 {
     BAD_MESSAGE = 0  UMETA(DisplayName = "Bad Message"),
-    ACTOR_UPDATE_REQUEST = 1 UMETA(DisplayName = "Actor Update Request"),
-    ACTOR_UPDATE_RESPONSE = 2 UMETA(DisplayName = "Actor Update Response"),
-    ACTOR_UPDATE_NOTIFICATION = 3 UMETA(DisplayName = "Actor Update Notification"),
-    VOXEL_UPDATE_REQUEST = 4 UMETA(DisplayName = "Voxel Update Request"),
-    VOXEL_UPDATE_RESPONSE = 5 UMETA(DisplayName = "Voxel Update Response"),
-    VOXEL_UPDATE_NOTIFICATION = 6 UMETA(DisplayName = "Voxel Update Notification"),
-    CLIENT_AUDIO_PACKET = 7 UMETA(DisplayName = "Client Audio Packet"),
-    CLIENT_AUDIO_NOTIFICATION = 8 UMETA(DisplayName = "Client Audio Notification"),
-    CLIENT_TEXT_PACKET = 9 UMETA(DisplayName = "Client Text Packet"),
-    CLIENT_TEXT_NOTIFICATION = 10 UMETA(DisplayName = "Client Text Notification"),
-    CLIENT_EVENT_NOTIFICATION = 11 UMETA(DisplayName = "Client Event Notification"),
-    SERVER_EVENT_NOTIFICATION = 12 UMETA(DisplayName = "Server Event Notification"),
-    RESERVED_13 = 13 UMETA(DisplayName = "Reserved Message Type"),
-    MESSAGE_BUNDLE = 14 UMETA(DisplayName = "Message Bundle")
+    RESERVED_1 = 1 UMETA(DisplayName = "Reserved 1"),
+    MESSAGE_BUNDLE = 2 UMETA(DisplayName = "Message Bundle"),
+    GENERIC_ERROR_MESSAGE = 3 UMETA(DisplayName = "Generic Error Message"),
+    RESERVED_13 = 13 UMETA(DisplayName = "Reserved 13"),
+    
+    
+    
+    ACTOR_UPDATE_REQUEST = 128 UMETA(DisplayName = "Actor Update Request"),
+    ACTOR_UPDATE_RESPONSE = 129 UMETA(DisplayName = "Actor Update Response"),
+    ACTOR_UPDATE_NOTIFICATION = 130 UMETA(DisplayName = "Actor Update Notification"),
+    VOXEL_UPDATE_REQUEST = 131 UMETA(DisplayName = "Voxel Update Request"),
+    VOXEL_UPDATE_RESPONSE = 132 UMETA(DisplayName = "Voxel Update Response"),
+    VOXEL_UPDATE_NOTIFICATION = 133 UMETA(DisplayName = "Voxel Update Notification"),
+    CLIENT_AUDIO_PACKET = 134 UMETA(DisplayName = "Client Audio Packet"),
+    CLIENT_AUDIO_NOTIFICATION = 135 UMETA(DisplayName = "Client Audio Notification"),
+    CLIENT_TEXT_PACKET = 136 UMETA(DisplayName = "Client Text Packet"),
+    CLIENT_TEXT_NOTIFICATION = 137 UMETA(DisplayName = "Client Text Notification"),
+    CLIENT_EVENT_NOTIFICATION = 138 UMETA(DisplayName = "Client Event Notification"),
+    SERVER_EVENT_NOTIFICATION = 139 UMETA(DisplayName = "Server Event Notification"),
+    GENERIC_SPATIAL_1 = 140 UMETA(DisplayName = "Generic Spatial 1"),
 };
 
 
@@ -114,7 +120,7 @@ enum class ECrowdyActorType : uint8
  * - IsMember: Regular member permission.
  * - CanFly: Permission to enable flying capabilities.
  * - CannotFly: Restriction from flying capabilities.
- * - CanCreatVoxel: Permission to create voxel structures.
+ * - CanCreateVoxel: Permission to create voxel structures.
  * - CannotCreateVoxel: Restriction from creating voxel structures.
  * - CanDestroyVoxel: Permission to destroy voxel structures.
  * - CannotDestroyVoxel: Restriction from destroying voxel structures.
@@ -150,4 +156,29 @@ enum class ECrowdyPermissions : uint8
     CannotTeleportOut = 17,
     CanUseWeapon = 18,
     CannotUseWeapon = 19
+};
+
+UENUM()
+enum class ECrowdyDecayRate : uint8
+{
+    No_Decay = 0,
+    Exponential_Decay = 1,
+    Linear_50 = 2,
+    Linear_25 = 3,
+    Linear_10 = 4,
+    Linear_5 = 5,
+};
+
+UENUM()
+enum class ECrowdyReplicationDistance : uint8
+{
+    None = 0,
+    One_Chunk = 1,
+    Two_Chunks = 2,
+    Three_Chunks = 3,
+    Four_Chunks = 4,
+    Five_Chunks = 5,
+    Six_Chunks = 6,
+    Seven_Chunks = 7,
+    Eight_Chunks = 8,
 };

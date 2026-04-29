@@ -4,12 +4,7 @@
 
 struct FTextMessageRequest : ICrowdyMessage
 {
-	int64 MapID;
-	int64 ChunkX;
-	int64 ChunkY;
-	int64 ChunkZ;
 	int64 UserID;
-	FString UUID;
 	FString Username;
 	FString Message;
 	
@@ -25,21 +20,8 @@ struct FTextMessageRequest : ICrowdyMessage
 	
 	virtual TArray<uint8> Serialize() const override
 	{
-		TArray<uint8> Data;
+		TArray<uint8> Data = SerializeMetadata();
 		
-		Data.Append(reinterpret_cast<const uint8*>(&MapID), sizeof(int64));
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkX), sizeof(int64));
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkY), sizeof(int64));
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkZ), sizeof(int64));
-
-		// Convert FString to UTF-8 bytes
-		const FTCHARToUTF8 UTF8String(*UUID);
-
-		// Add the UTF-8 bytes to the payload
-		const TArray UUIDBytes(reinterpret_cast<const uint8*>(UTF8String.Get()), UTF8String.Length());
-		Data.Append(UUIDBytes);
-
-	
 		// Write UserID
 		Data.Append(reinterpret_cast<const uint8*>(&UserID), sizeof(int64));
     
@@ -58,14 +40,14 @@ struct FTextMessageRequest : ICrowdyMessage
 		return Data;
 	}
 	
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
-		
+		return false;
 	}
 	
 	virtual uint32 GetMessageSize() const override
 	{
-		return sizeof(MapID) + sizeof(int64)*3 + 32 + sizeof(int32)*2 + Message.Len();
+		return sizeof(AppID) + sizeof(int64)*3 + 32 + sizeof(int32)*2 + Message.Len();
 	}
 	
 };

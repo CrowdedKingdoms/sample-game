@@ -11,6 +11,7 @@
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
 #include "Internal/FCrowdyServiceRegistry.h"
 #include "Internal/FCrowdyDataRegistry.h"
+#include "Messages/FPingTestMessage.h"
 #include "Network/GraphQL/CrowdyQuerySubsystem.h"
 #include "Network/UDP/FCrowdyTransmissionLayerUDP.h"
 #include "Serialization/FCrowdyMessageParser.h"
@@ -43,7 +44,7 @@ void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// Pure allocations (no world required)
 	ServiceRegistry = new FCrowdyServiceRegistry();
 	DataRegistry    = new FCrowdyDataRegistry();
-	Parser          = new FCrowdyMessageParser();
+	Parser          = new FCrowdyMessageParser(ServiceRegistry, UdpSubsystem);
 	BufferPool      = new FMessageBufferPool();
 
 	const UWorld* World = GetWorld();
@@ -151,14 +152,29 @@ void UCrowdySDKSubsystem::SetQueryEndpoint(const FString InEndpoint) const
 	QuerySubsystem->SetEndpoint(InEndpoint);
 }
 
-void UCrowdySDKSubsystem::StartUDPTimeoutMonitoring(const float ThresholdSeconds) const
+void UCrowdySDKSubsystem::StartUDPTimeoutMonitoring(const float ThresholdSeconds)
 {
 	UdpSubsystem->StartTimeoutMonitoring(ThresholdSeconds);
+	
+	if (!bIsRegistered)
+	{
+		RegisterReceptionLayer(this);
+		bIsRegistered = true;
+	}
+	
+	if (!PingMessageTimerHandle.IsValid())
+		GetWorld()->GetTimerManager().SetTimer(PingMessageTimerHandle, 
+			this, 
+			&UCrowdySDKSubsystem::SendPingTestMessage, 
+			5.0f, true, 5.0f);
 }
 
-void UCrowdySDKSubsystem::StopUDPTimeoutMonitoring() const
+void UCrowdySDKSubsystem::StopUDPTimeoutMonitoring()
 {
 	UdpSubsystem->StopTimeoutMonitoring();
+	
+	if (PingMessageTimerHandle.IsValid())
+		GetWorld()->GetTimerManager().ClearTimer(PingMessageTimerHandle);
 }
 
 void UCrowdySDKSubsystem::StopNetworkOperations() const
@@ -215,7 +231,7 @@ void UCrowdySDKSubsystem::RequestTeleportPermission(const int64 ChunkX, const in
                                                     const int32 VoxelX, const int32 VoxelY, const int32 VoxelZ) const
 {
 	FTeleportRequest TeleportRequest;
-	TeleportRequest.MapID = GameSession->GetMapID();
+	TeleportRequest.MapID = GameSession->GetAppID();
 	TeleportRequest.UUID = GameSession->GetUUID();
 	TeleportRequest.ChunkX = ChunkX;
 	TeleportRequest.ChunkY = ChunkY;
@@ -226,6 +242,18 @@ void UCrowdySDKSubsystem::RequestTeleportPermission(const int64 ChunkX, const in
 	TeleportRequest.PrepareQuery();
 	ExecuteQuery(TeleportRequest);
 }
+
+void UCrowdySDKSubsystem::DeregisterAllReceptionLayers()
+{
+	ServiceRegistry->DeregisterAllReceptionLayers();
+	bIsRegistered = false;
+}
+
+void UCrowdySDKSubsystem::SetExpectedActorUpdateStateSize(const int32 InSize) const
+{
+	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] Expected Actor Update State Size: %d"), InSize);
+	Parser->SetExpectedActorStateSize(InSize);
+}	
 
 void UCrowdySDKSubsystem::HandleLogin(const FLoginResponse& LoginResponse) const
 {
@@ -319,6 +347,21 @@ void UCrowdySDKSubsystem::OnUDPConnectionSuccessful()
 	OnUDPConnectionSuccess.Broadcast();
 }
 
+void UCrowdySDKSubsystem::SendPingTestMessage()
+{
+	const FInt64Vector ChunkCoordinate = GameSession->GetPlayerCurrentChunkCoordinates();
+	
+	FPingTestMessage PingTestMessage;
+	PingTestMessage.UUID = GameSession->GetUUID();
+	PingTestMessage.AppID = GameSession->GetAppID();
+	PingTestMessage.ChunkX = ChunkCoordinate.X;
+	PingTestMessage.ChunkY = ChunkCoordinate.Y;
+	PingTestMessage.ChunkZ = ChunkCoordinate.Z;
+	PingTestMessage.DecayRate = ECrowdyDecayRate::Exponential_Decay;
+	PingTestMessage.ReplicationDistance = ECrowdyReplicationDistance::One_Chunk;
+	SendMessage(PingTestMessage);
+}
+
 void UCrowdySDKSubsystem::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const
 {
 	if (!Layer)
@@ -363,9 +406,7 @@ void UCrowdySDKSubsystem::SendMessage(const ICrowdyMessage& Message) const
 
 	if (TransmissionLayer)
 	{
-		TransmissionLayer->SendBytes(MoveTemp(Bytes));
-		if (Message.GetType() == ECrowdyMessageType::CLIENT_AUDIO_PACKET)
-			UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] Send Message:%s"), *Message.GetTypeName().ToString());
+		TransmissionLayer->SendBytes(MoveTemp(Bytes), Message.bContainsAuth, Message.SequenceNumber);
 	}
 }
 
@@ -471,4 +512,31 @@ TArray<EQueryResponseType> UCrowdySDKSubsystem::GetSupportedResponseType() const
 		EQueryResponseType::VersionInfo,
 		EQueryResponseType::TeleportRequest
 	};
+}
+
+void UCrowdySDKSubsystem::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
+{
+	switch (Message->GetType())
+	{
+	case ECrowdyMessageType::GENERIC_SPATIAL_1:
+		{
+			const auto& PingTestMessage = static_cast<const FPingTestMessage&>(*Message);
+			
+			if (PingTestMessage.UUID != GameSession->GetUUID())
+			{
+				return;
+			}
+			
+			const int64 PingTimeMs = PingTestMessage.ReceiveTime - PingTestMessage.SendTime;
+			UdpSubsystem->UpdatePingTime(PingTimeMs);
+			break;
+		}
+	default:
+		break;
+	}
+}
+
+TArray<ECrowdyMessageType> UCrowdySDKSubsystem::GetSupportedResponseTypes() const
+{
+	return {ECrowdyMessageType::GENERIC_SPATIAL_1};
 }

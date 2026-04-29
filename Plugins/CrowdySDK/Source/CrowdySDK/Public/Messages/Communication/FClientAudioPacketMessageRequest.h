@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Core/UDP/Enums/ECrowdyMessageType.h"
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
+#include "Utils/SerializationFunctionLibrary.h"
 
 struct FClientAudioFrame
 {
@@ -11,9 +12,7 @@ struct FClientAudioFrame
 
 struct FClientAudioPacketMessageRequest : ICrowdyMessage
 {
-	int64 MapID;
-	FInt64Vector ChunkCoordinates;
-	FString UUID;
+	
 	int32 SampleRate;
 	int32 NumChannels;
 	TArray<FClientAudioFrame> Frames;
@@ -30,19 +29,7 @@ struct FClientAudioPacketMessageRequest : ICrowdyMessage
 	
 	virtual TArray<uint8> Serialize() const override
 	{
-		TArray<uint8> Data;
-		
-		Data.Add(static_cast<uint32>(GetType()) & 0xFF);
-		
-		Data.Append(reinterpret_cast<const uint8*>(&MapID), sizeof(int64));
-		
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkCoordinates.X), sizeof(int64));
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkCoordinates.Y), sizeof(int64));
-		Data.Append(reinterpret_cast<const uint8*>(&ChunkCoordinates.Z), sizeof(int64));
-		
-		const FTCHARToUTF8 UTF8String(*UUID);
-		check(UTF8String.Length() == 32);
-		Data.Append(reinterpret_cast<const uint8*>(UTF8String.Get()), 32);
+		TArray<uint8> Data = SerializeMetadata();
 		
 		Data.Append(reinterpret_cast<const uint8*>(&SampleRate), sizeof(int32));
 		Data.Append(reinterpret_cast<const uint8*>(&NumChannels), sizeof(int32));
@@ -60,9 +47,9 @@ struct FClientAudioPacketMessageRequest : ICrowdyMessage
 		return Data;
 	}
 	
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
-		
+		return false;
 	}
 	
 	virtual uint32 GetMessageSize() const override

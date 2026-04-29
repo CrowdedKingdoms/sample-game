@@ -4,6 +4,7 @@
 #include "Network/UDP/CrowdyUDPSubsystem.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
+#include "Core/UDP/Enums/ECrowdyMessageType.h"
 #include "Queries/UDP/FUDPAddressNotify.h"
 #include "Subsystem/CrowdyGameSession.h"
 #include "Threading/FUDPListener.h"
@@ -28,9 +29,17 @@ void UCrowdyUDPSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UCrowdyUDPSubsystem::Deinitialize()
 {
+	
+	// Signal all in-flight AsyncTasks to abort before we tear anything down
+	bIsShuttingDown = true;
+	
 	StopUDPListener();
 	StopUDPv4Listener();
 	CleanupSockets();
+	
+	// Clear GameSession reference so any racing lambda sees nullptr
+	GameSession = nullptr;
+	
 	Super::Deinitialize();
 }
 
@@ -68,7 +77,22 @@ void UCrowdyUDPSubsystem::HandleUDPMessage(const uint8* Data, const int32 Size)
 	TArray<uint8> Message;
 	Message.SetNumUninitialized(Size);
 	FMemory::Memcpy(Message.GetData(), Data, Size);
-	GameSession->EnqueueMessageToReceive(Message);
+
+	if (const bool HmacVerify = USerializationFunctionLibrary::AuthenticateHMAC(Message, GameSession->GetGameToken()); !HmacVerify)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CrowdySDK]: HMAC verification failed for received message"));
+		return;
+	}
+	
+	if (bIsShuttingDown)
+		return;
+		
+	if (IsValid(GameSession))
+	{
+		OnMessageReceived();
+		GameSession->EnqueueMessageToReceive(Message);
+	}
+	
 }
 
 void UCrowdyUDPSubsystem::OnMessageReceived()
@@ -82,6 +106,10 @@ void UCrowdyUDPSubsystem::OnMessageReceived()
 	{
 		AsyncTask(ENamedThreads::GameThread, [this] ()
 		{
+			
+			if (bIsShuttingDown)
+				return;
+			
 			bUDPConnected = true;
 			OnUDPConnectionSuccessful.Broadcast();
 		});
@@ -97,11 +125,31 @@ FUDPNetworkStatistics UCrowdyUDPSubsystem::GetUDPNetworkStats() const
 	Stats.DatagramsReceived = LastSecondReceivedDatagrams;
 	Stats.MessagesSentPerSecond = LastSecondMessagesSent;
 	Stats.MessagesReceivedPerSecond = LastSecondMessagesReceived;
+	Stats.TotalClientNotifiesSent = TotalClientNotifiesSent;
+	Stats.TotalClientNotifiesReceived = TotalClientNotifiesReceived;
+	Stats.Ping = PingTime;
+	Stats.TotalPendingClientNotifies = TotalClientNotifiesSent.load() - TotalClientNotifiesReceived.load();
 	
 	if (Stats.DatagramsReceived > 0)
 		Stats.SendRecvRatio = static_cast<float>(Stats.BytesSent) / static_cast<float>(Stats.BytesReceived);
 	
+	if (Stats.TotalClientNotifiesSent > 0)
+		Stats.ClientNotifyLossPercentage = ((Stats.TotalClientNotifiesSent - Stats.TotalClientNotifiesReceived) /
+			static_cast<float>(Stats.TotalClientNotifiesSent)) * 100.0f;
+	
 	return Stats;
+}
+
+void UCrowdyUDPSubsystem::ResetUDPNetworkStats()
+{
+	LastSecondSentBytes = 0;
+	LastSecondReceivedBytes = 0;
+	LastSecondSentDatagrams = 0;
+	LastSecondReceivedDatagrams = 0;
+	LastSecondMessagesSent = 0;
+	LastSecondMessagesReceived = 0;
+	TotalClientNotifiesReceived = 0;
+	TotalClientNotifiesSent = 0;
 }
 
 void UCrowdyUDPSubsystem::StartTimeoutMonitoring(const float ThresholdSeconds)
@@ -148,6 +196,16 @@ void UCrowdyUDPSubsystem::ToggleUdpEvents(const bool bAllow)
 	bAllowUdpEvents = bAllow;
 }
 
+void UCrowdyUDPSubsystem::IncrementTotalClientNotifiesReceived()
+{
+	++TotalClientNotifiesReceived;
+}
+
+void UCrowdyUDPSubsystem::UpdatePingTime(const int64 NewPingTime)
+{
+	PingTime = NewPingTime;
+}
+
 bool UCrowdyUDPSubsystem::InitializeUDP(const FUDPAddressNotify& UDPAddressNotify)
 {
 	bUseIPv4 = false;
@@ -181,10 +239,9 @@ void UCrowdyUDPSubsystem::CheckForTimeout()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UDP timeout detected - no messages received for %lld seconds"),
 			   TimeSinceLastMessage);
-
-		// Stop monitoring to prevent multiple timeout triggers
+		
 		StopTimeoutMonitoring();
-
+		
 		// Stop all UDP operations
 		StopAllOperations();
 
@@ -200,7 +257,9 @@ void UCrowdyUDPSubsystem::StopAllOperations()
 	StopUDPListener();
 	StopUDPv4Listener();
 	
-	StopTimeoutMonitoring();
+	//if (!bTimeoutEnabled)
+	//	StopTimeoutMonitoring();
+	
 	CleanupSockets();
 	
 	bUDPConnected = false;
@@ -412,6 +471,12 @@ bool UCrowdyUDPSubsystem::SendUDPv6(const TArray<uint8>& Message)
 		SentBytesThisSecond += BytesSentNow;
 		++SentDatagramsThisSecond;
 		++MessagesSentThisSecond;
+		
+		if (static_cast<ECrowdyMessageType>(Message[0]) == ECrowdyMessageType::CLIENT_EVENT_NOTIFICATION)
+		{
+			//UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: Client Event Notify Sent"));
+			++TotalClientNotifiesSent;
+		}
 		
 		return bUDPPacketSent && BytesSentNow > 0;
 	}

@@ -13,30 +13,6 @@ struct FVoxelUpdateResponseMessage : ICrowdyMessage
 {
 	
 	/**
-	 * @brief A unique identifier for the map in the voxel update response message.
-	 *
-	 * MapID represents an int64 value used to identify a specific map
-	 * within the context of the voxel update system. This identifier is crucial
-	 * for operations that involve serialized data, as it helps distinguish which
-	 * map the data or updates pertain to.
-	 *
-	 * It is populated during deserialization and is included in log output for debug
-	 * purposes. This helps in tracking or identifying issues related to voxel updates
-	 * across multiple maps during runtime.
-	 */
-	int64 MapID;
-	/**
-	 * Represents the X-coordinate of a voxel chunk in a 3D grid.
-	 *
-	 * This variable, along with ChunkY and ChunkZ is used to define the position
-	 * of a voxel chunk in the grid of a voxel-based system. The value is typically
-	 * an integer representing the chunk location along the X-axis.
-	 *
-	 * Commonly deserialized or serialized as part of message data within the voxel
-	 * system to communicate or reconstruct chunk information.
-	 */
-	int64 ChunkX, ChunkY, ChunkZ;
-	/**
 	 * @brief Represents the voxel update response normal vector component along the X-axis.
 	 *
 	 * This variable stores the X-axis component of the voxel update normal vector
@@ -90,32 +66,19 @@ struct FVoxelUpdateResponseMessage : ICrowdyMessage
 	 * @param Data The serialized data that needs to be deserialized.
 	 * @param format The format or schema used for deserialization.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		int32 Offset = 0;
+		if (Data.Num() <= 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateResponseMessage::Deserialize - Data is empty"));
+			return false;
+		}
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, MapID, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkX, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkY, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ, Offset);
-		Offset += sizeof(int64);
-		
-		USerializationFunctionLibrary::DeserializeValue(Data, Vx, Offset);
-		Offset += sizeof(int16);
-		USerializationFunctionLibrary::DeserializeValue(Data, Vy, Offset);
-		Offset += sizeof(int16);
-		USerializationFunctionLibrary::DeserializeValue(Data, Vz, Offset);
-		Offset += sizeof(int16);
-		
+		SequenceNumber = static_cast<uint8>(Data[Offset]);
+		Offset += sizeof(uint8);
 		ErrorCode = static_cast<ECrowdyErrorCode>(Data[Offset]);
-		
-		UE_LOG(LogTemp, Warning,
-		       TEXT(
-			       "[CrowdySDK] Deserialized VoxelUpdateResponseMessage: MapID=%lld, ChunkX=%lld, ChunkY=%lld, ChunkZ=%lld, Vx=%lld, Vy=%lld, Vz=%lld, ErrorCode=%d"
-		       ), MapID, ChunkX, ChunkY, ChunkZ, Vx, Vy, Vz, static_cast<int32>(ErrorCode));
+		return true;
 	}
 
 	/**

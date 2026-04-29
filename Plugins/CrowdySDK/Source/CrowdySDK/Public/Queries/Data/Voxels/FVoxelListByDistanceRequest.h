@@ -4,7 +4,7 @@
 
 struct FVoxelListByDistanceRequest : ICrowdyQueryRequest
 {
-	int64 MapID = -1;
+	int64 AppID = -1;
 	int64 CenterX;
 	int64 CenterY;
 	int64 CenterZ;
@@ -19,7 +19,7 @@ struct FVoxelListByDistanceRequest : ICrowdyQueryRequest
 	
 	virtual void PrepareQuery() override
 	{
-		RuntimeVariables.Add(TEXT("input.mapId"), FString::Printf(TEXT("%lld"), MapID));
+		RuntimeVariables.Add(TEXT("input.appId"), FString::Printf(TEXT("%lld"), AppID));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.x"), FString::Printf(TEXT("%lld"), CenterX));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.y"), FString::Printf(TEXT("%lld"), CenterY));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.z"), FString::Printf(TEXT("%lld"), CenterZ));
@@ -40,7 +40,7 @@ struct FVoxelListByDistanceRequest : ICrowdyQueryRequest
 	
 	virtual bool IsValid() const override
 	{
-		return RuntimeVariables.Num() == 8 && MapID > -1;
+		return RuntimeVariables.Num() == 8 && AppID > -1;
 	}
 	
 private:

@@ -5,7 +5,7 @@
 struct FUpdateChunkRequest : ICrowdyQueryRequest
 {
 	TArray<uint8> Voxels;
-	int64 MapID;
+	int64 AppID;
 	int64 ChunkX;
 	int64 ChunkY;
 	int64 ChunkZ;
@@ -17,7 +17,7 @@ struct FUpdateChunkRequest : ICrowdyQueryRequest
 	
 	virtual void PrepareQuery() override
 	{
-		RuntimeVariables.Add(TEXT("mapId"), FString::Printf(TEXT("%lld"), MapID));
+		RuntimeVariables.Add(TEXT("appId"), FString::Printf(TEXT("%lld"), AppID));
 		RuntimeVariables.Add(TEXT("x"), FString::Printf(TEXT("%lld"), ChunkX));
 		RuntimeVariables.Add(TEXT("y"), FString::Printf(TEXT("%lld"), ChunkY));
 		RuntimeVariables.Add(TEXT("z"), FString::Printf(TEXT("%lld"), ChunkZ));
@@ -36,7 +36,7 @@ struct FUpdateChunkRequest : ICrowdyQueryRequest
 	
 	virtual bool IsValid() const override
 	{
-		return Voxels.Num() > 0 && MapID > -1 && RuntimeVariables.Num() == 5;
+		return Voxels.Num() > 0 && AppID > -1 && RuntimeVariables.Num() == 5;
 	}
 	
 	

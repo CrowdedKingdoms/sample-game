@@ -18,37 +18,7 @@
 struct FVoxelUpdateNotificationMessage : ICrowdyMessage
 {
 	
-	/**
-	 * @brief Unique identifier for the map associated with the message.
-	 *
-	 * Represents a 64-bit integer value that uniquely identifies the map
-	 * within the context of the message. This value is used in the deserialization
-	 * and processing of the message to associate it with a specific map.
-	 *
-	 * @note This ID is critical for distinguishing the scope of operations
-	 *       or updates related to the map.
-	 */
-	int64 MapID;
-	/**
-	 * Represents the X-coordinate of a voxel chunk in the voxel world.
-	 *
-	 * This variable is part of a 3D coordinate system for identifying the position of a specific
-	 * chunk in the voxel-based system. It is typically used for spatial operations, such as
-	 * serialization, deserialization, and notification handling related to voxel updates.
-	 */
-	int64 ChunkX, ChunkY, ChunkZ;
-	/**
-	 * Represents the velocity components along the X, Y, and Z axes
-	 * for a voxel update notification.
-	 *
-	 * These values typically indicate the direction and magnitude of
-	 * motion or change associated with the voxel. They are stored as
-	 * signed 16-bit integers, allowing both positive and negative
-	 * velocities.
-	 *
-	 * @note These components are used during the deserialization process
-	 *       to reconstruct the state of the voxel from serialized data.
-	 */
+	
 	int16 Vx, Vy, Vz;
 	/**
 	 * @brief Represents the type of a voxel in a voxel-based system.
@@ -72,6 +42,8 @@ struct FVoxelUpdateNotificationMessage : ICrowdyMessage
 	 * voxel manipulation and update notifications.
 	 */
 	TArray<uint8> StateBytes;
+	uint16 StateSize;
+	
 	/**
 	 * @brief Indicates whether the voxel update notification message contains voxel state data.
 	 *
@@ -116,40 +88,73 @@ struct FVoxelUpdateNotificationMessage : ICrowdyMessage
 	 *
 	 * @param Data The serialized byte array containing the voxel update data to deserialize.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		const int32 DataLength = Data.Num();
 		
 		if (DataLength <= 0)
-			return;
+			return false;
 		
 		int32 Offset = 0;
-		USerializationFunctionLibrary::DeserializeValue(Data, MapID, Offset);
-		Offset += sizeof(int64);
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkX, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkY, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ, Offset);
-		Offset += sizeof(int64);
-		
-		USerializationFunctionLibrary::DeserializeValue(Data, Vx, Offset);
-		Offset += sizeof(int16);
-		USerializationFunctionLibrary::DeserializeValue(Data, Vy, Offset);
-		Offset += sizeof(int16);
-		USerializationFunctionLibrary::DeserializeValue(Data, Vz, Offset);
-		Offset += sizeof(int16);
-		
-		USerializationFunctionLibrary::DeserializeValue(Data, VoxelType, Offset);
-		Offset += sizeof(int16);
-		
-		if (DataLength > 72)
+		if (!DeserializeMetadata(Data, Offset))
 		{
-			StateBytes.SetNumUninitialized(Data.Num() - Offset);
-			bContainsState = true;
-			FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, Data.Num() - Offset);
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - Metadata deserialization failed"));
+			return false;
 		}
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, Vx, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - Vx deserialization failed"));
+			 return false;
+		}
+		Offset += sizeof(int16);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, Vy, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - Vy deserialization failed"));
+			 return false;
+		}
+		Offset += sizeof(int16);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, Vz, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - Vz deserialization failed"));
+			return false;
+		}
+		Offset += sizeof(int16);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, VoxelType, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - VoxelType deserialization failed"));
+			return false;
+		}
+		
+		Offset += sizeof(int16);
+		
+		if (Offset + sizeof(uint16) <= DataLength)
+		{
+			if (!USerializationFunctionLibrary::DeserializeValue(Data, StateSize, Offset))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - StateSize deserialization failed"));
+				return false;
+			}
+			
+			Offset += sizeof(uint16);
+			
+			if (StateSize > 0 && StateSize < 5000)
+			{
+				bContainsState = true;
+				StateBytes.SetNumUninitialized(StateSize);
+				FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+			}
+			
+			return true;
+		}
+		
+		UE_LOG(LogTemp, Warning, TEXT("FVoxelUpdateNotificationMessage::Deserialize - StateSize deserialization failed"));
+		return false;
+		
 	}
 
 	/**

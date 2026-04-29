@@ -27,6 +27,8 @@ public:
 	 *
 	 * @param Data An rvalue reference to a TArray of uint8 representing the byte
 	 *             array to be transmitted.
+	 * @param bRequiresAuth
+	 * @param SequenceNumber
 	 */
-	virtual void SendBytes(TArray<uint8>&& Data) = 0;
+	virtual void SendBytes(TArray<uint8>&& Data, bool bRequiresAuth, uint8 SequenceNumber) = 0;
 };

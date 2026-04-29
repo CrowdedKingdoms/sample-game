@@ -31,59 +31,9 @@
 struct FGameEventNotification : ICrowdyMessage
 {
 	
-	/**
-	 * @brief Represents the identifier for a specific map instance.
-	 *
-	 * This variable is used to uniquely identify a map in a system
-	 * that manages multiple maps. It serves as an essential key
-	 * for retrieving, updating, or performing operations on the corresponding map data.
-	 *
-	 * It is crucial in scenarios where multiple maps coexist and
-	 * maintaining distinction between them is necessary.
-	 */
-	int64 MapID;
-	/**
-	 * @brief Represents the X-coordinate of a chunk in a grid or partitioned space.
-	 *
-	 * This variable is typically used to identify or manipulate the horizontal
-	 * position of a chunk within a larger system, such as a game world or a
-	 * divided data structure. Each chunk represents a discrete segment, and
-	 * ChunkX determines its location along the X-axis.
-	 *
-	 * Usage scenarios include spatial computations, rendering systems, and
-	 * data organization where chunks are divided in a grid-like manner.
-	 */
-	int64 ChunkX, ChunkY, ChunkZ;
-	/**
-	 * @brief A universally unique identifier (UUID).
-	 *
-	 * This variable is used to represent a 128-bit unique identifier.
-	 * It is commonly used in software systems to uniquely identify
-	 * objects, entities, or records across distributed systems or
-	 * within a single application.
-	 *
-	 * The UUID ensures a high probability of being unique, even when
-	 * generated simultaneously by different processes or systems.
-	 *
-	 * Note: Adheres to the specifications defined in RFC 4122.
-	 */
-	FString UUID;
-	/**
-	 * @brief Represents the type of an event in the system.
-	 *
-	 * This variable is used to categorize or distinguish different kinds of events
-	 * that occur within the application. The specific values and their meanings
-	 * depend on the context in which the variable is used.
-	 *
-	 * Potential usage scenarios include:
-	 * - Identifying user actions or interactions.
-	 * - Differentiating between system-generated events.
-	 * - Managing custom application-defined events.
-	 *
-	 * Proper assignment and usage of this variable ensure accurate event handling
-	 * and processing within the system.
-	 */
+	
 	uint16 EventType;
+	
 	/**
 	 * @brief Represents the state or condition of an entity or process.
 	 *
@@ -150,31 +100,45 @@ struct FGameEventNotification : ICrowdyMessage
 	 * @throws IllegalArgumentException If the input or type is invalid.
 	 * @throws DeserializationException If the deserialization process fails.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		int32 Offset = 0;
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, MapID, Offset);
-		Offset += sizeof(MapID);
+		if (!DeserializeMetadata(Data, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FGameEventNotification::Deserialize - Metadata deserialization failed"));
+			return false;
+		}
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkX, Offset);
-		Offset += sizeof(ChunkX);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkY, Offset);
-		Offset += sizeof(ChunkY);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ, Offset);
-		Offset += sizeof(ChunkZ);
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, EventType, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FGameEventNotification::Deserialize - EventType deserialization failed"));
+			return false;
+		}
 		
-		UUID = USerializationFunctionLibrary::DeserializeString(Data, Offset, 32);
-		Offset += 32;
-		
-		USerializationFunctionLibrary::DeserializeValue(Data, EventType, Offset);
 		Offset += sizeof(EventType);
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, StateSize, Offset);
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, StateSize, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FGameEventNotification::Deserialize - StateSize deserialization failed"));
+			return false;
+		}
 		Offset += sizeof(StateSize);
+		
+		// Safety check to prevent crashes
+		constexpr int32 MAX_STATE_SIZE = 1024 * 1024; // 1 MB, adjust based on your system
+		
+		if (StateSize < 0 || StateSize > MAX_STATE_SIZE || Offset + StateSize > Data.Num())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FGameEventNotification::Deserialize - Invalid StateSize %d or Data overflow"), StateSize);
+			StateBytes.Empty();
+			return false; // safely skip deserialization
+		}
+		
 		
 		StateBytes.SetNumUninitialized(StateSize);
 		FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+		return true;
 	}
 
 	/**
@@ -189,7 +153,7 @@ struct FGameEventNotification : ICrowdyMessage
 	 */
 	virtual uint32 GetMessageSize() const override
 	{
-		return sizeof(MapID) + sizeof(int64)*3 + 32 + sizeof(EventType) + StateSize;
+		return sizeof(AppID) + sizeof(int64)*3 + 32 + sizeof(EventType) + StateSize;
 	}
 
 	

@@ -148,9 +148,12 @@ void FVoiceChatService::SendAudioData(const TArray<uint8>& InAudioData, int32 En
 	// Write header once
 	if (!bHeaderWritten || SampleRate != CurrentSampleRate || NumChannels != CurrentNumChannels)
 	{
+		const FInt64Vector ChunkCoordinates = GameSessionSubsystem->GetPlayerCurrentChunkCoordinates();
 		AccumulatedAudioPacket = {};
-		AccumulatedAudioPacket.MapID = GameSessionSubsystem->GetMapID();
-		AccumulatedAudioPacket.ChunkCoordinates = GameSessionSubsystem->GetPlayerCurrentChunkCoordinates();
+		AccumulatedAudioPacket.AppID = GameSessionSubsystem->GetAppID();
+		AccumulatedAudioPacket.ChunkX = ChunkCoordinates.X;
+		AccumulatedAudioPacket.ChunkY = ChunkCoordinates.Y;
+		AccumulatedAudioPacket.ChunkZ = ChunkCoordinates.Z;
 		AccumulatedAudioPacket.UUID = GameSessionSubsystem->GetUUID();
 		AccumulatedAudioPacket.SampleRate = SampleRate;
 		AccumulatedAudioPacket.NumChannels = NumChannels;

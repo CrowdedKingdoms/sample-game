@@ -17,7 +17,7 @@ struct FGameSessionInfo
 	GENERATED_BODY()
 	
 	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
-	int64 MapID = 1;
+	int64 AppID = 1;
 	
 	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
 	FString GameToken = "";
@@ -45,7 +45,7 @@ struct FGameSessionInfo
 	
 	void Reset()
 	{
-		MapID = 0;
+		AppID = 0;
 		GameToken = "";
 		GameTokenID = 0;
 		UserID = 0;
@@ -76,7 +76,7 @@ public:
 	[[nodiscard]] bool DequeueMessageToReceive(TArray<uint8>& OutMessage);
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
-	void SetMapID(const int64 InMapID) {GameSessionInfo.MapID = InMapID;}
+	void SetAppID(const int64 InAppID) {GameSessionInfo.AppID = InAppID;}
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
 	void SetUserID(const int64 InUserID){GameSessionInfo.UserID = InUserID;}
@@ -97,7 +97,7 @@ public:
 	FInt64Vector GetPlayerCurrentChunkCoordinates() const {return GameSessionInfo.CurrentPlayerChunkCoordinates;}
 	
 	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
-	int64 GetMapID() const { return GameSessionInfo.MapID;}
+	int64 GetAppID() const { return GameSessionInfo.AppID;}
 	
 	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
 	FString GetGameToken() const {return GameSessionInfo.GameToken;}
@@ -141,6 +141,9 @@ public:
 	[[nodiscard]] bool HasPendingIncomingMessages() const; 
 	
 	[[nodiscard]] bool HasPendingOutgoingMessages() const;
+	
+	FEvent* GetSendEvent() const;
+	FEvent* GetReceiveEvent() const;
 private:
 	
 	UPROPERTY()
@@ -154,4 +157,7 @@ private:
 	
 	FCriticalSection SendQueueMutex;
 	FCriticalSection ReceiveQueueMutex;
+	
+	FEvent* SendEvent;
+	FEvent* ReceiveEvent;
 };

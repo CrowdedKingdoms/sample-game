@@ -32,7 +32,9 @@ public:
 	                                * InUdpSubsystem, UCrowdyGameSession* InGameSession);
 	
 	void EnqueueTasks(const TArray<TFunction<void()>>& Tasks);
-
+	
+	void StopAllProcesses();
+	
 private:
 	
 	UPROPERTY()
@@ -59,8 +61,6 @@ private:
 	bool bWasPreviouslyConnected = false;
 	
 	void InitializeWorkerThreads();
-	
-	void StopAllProcesses();
 	
 	void RunSendLoop() const;
 

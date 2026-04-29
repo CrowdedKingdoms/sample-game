@@ -7,7 +7,7 @@ struct FVoxelListRequest : ICrowdyQueryRequest
 	int64 ChunkX;
 	int64 ChunkY;
 	int64 ChunkZ;
-	int64 MapID = -1; 
+	int64 AppID = -1; 
 	
 	virtual FName GetOperationName() const override
 	{
@@ -16,7 +16,7 @@ struct FVoxelListRequest : ICrowdyQueryRequest
 	
 	virtual void PrepareQuery() override
 	{
-		RuntimeVariables.Add(TEXT("mapId"), FString::Printf(TEXT("%lld"), MapID));
+		RuntimeVariables.Add(TEXT("appId"), FString::Printf(TEXT("%lld"), AppID));
 		RuntimeVariables.Add(TEXT("x"), FString::Printf(TEXT("%lld"), ChunkX));
 		RuntimeVariables.Add(TEXT("y"), FString::Printf(TEXT("%lld"), ChunkY));
 		RuntimeVariables.Add(TEXT("z"), FString::Printf(TEXT("%lld"), ChunkZ));
@@ -32,6 +32,6 @@ struct FVoxelListRequest : ICrowdyQueryRequest
 	
 	virtual bool IsValid() const override
 	{
-		return MapID > -1 && RuntimeVariables.Num() == 4;
+		return AppID > -1 && RuntimeVariables.Num() == 4;
 	}
 };

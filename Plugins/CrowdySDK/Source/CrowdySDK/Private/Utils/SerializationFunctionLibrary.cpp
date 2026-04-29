@@ -55,20 +55,31 @@ float USerializationFunctionLibrary::DeserializeFloat(const TArray<uint8>& Paylo
 TArray<uint8> USerializationFunctionLibrary::CalculateHMAC(const TArray<uint8>& Payload, const FString& GameToken)
 {
 	TArray<uint8> HMACResult;
+	
+	const FTCHARToUTF8 Converter(*GameToken);
+	const uint8* TokenBytes = reinterpret_cast<const uint8*>(Converter.Get());
+	const int32 TokenLen = Converter.Length();
 
-	//Convert String to TArray uint8
+	// Ensure key is exactly 64 bytes
+	check(TokenLen == 64);
+	
 	TArray<uint8> Key;
-	Key.Append(reinterpret_cast<const uint8*>(TCHAR_TO_UTF8(*GameToken)), GameToken.Len());
+	Key.Append(TokenBytes, TokenLen);
+	
+	TArray<uint8> Message;
+	Message.Reserve(Payload.Num() + Key.Num());
+	Message.Append(Payload);
+	Message.Append(Key);
 
 	uint8 HMACBuffer[32] = {0};
-
 	unsigned int OutLen = 0;
+
 	HMAC(
 		EVP_sha256(),
-		Key.GetData(),
-		Key.Num(),
-		Payload.GetData(),
-		Payload.Num(),
+		Key.GetData(), 
+		Key.Num(), 
+		Message.GetData(), 
+		Message.Num(),
 		HMACBuffer,
 		&OutLen
 	);
@@ -80,51 +91,44 @@ TArray<uint8> USerializationFunctionLibrary::CalculateHMAC(const TArray<uint8>& 
 
 bool USerializationFunctionLibrary::AuthenticateHMAC(const TArray<uint8>& ReceivedMessage, const FString& GameToken)
 {
-	return true;
+	constexpr int32 HmacSize = 32;
+	constexpr int32 TailSizeWithAuth = 41;
+
+	if (ReceivedMessage.Num() < TailSizeWithAuth)
+	{
+		return false;
+	}
+
+	const bool bContainsAuth = ReceivedMessage[35] == 1;
 	
-	// if (ReceivedMessage.Num() < 37) // Minimum expected size (Payload + HVAC + Header)
-	// {
-	// 	UE_LOG(LogTemp, Error, TEXT("AuthenticateHVAC: Received message is too small to be valid."));
-	// 	return false;
-	// }
+	if (!bContainsAuth)
+	{
+		return true;
+	}
 
-	// // HVAC is the last 32 bytes
-	// constexpr int32 HMAC_Size = 32;
+	const int32 PrefixLen = ReceivedMessage.Num() - TailSizeWithAuth;
+	
+	if (PrefixLen <= 0)
+	{
+		return false;
+	}
 
-	// // The payload starts after the header and ends 32 bytes before the message end
-	// const int32 PayloadSize = ReceivedMessage.Num() - HMAC_Size;
+	const uint8* MessageData = ReceivedMessage.GetData();
+	const uint8* ReceivedHmac = MessageData + PrefixLen;
 
-	// if (PayloadSize <= 0)
-	// {
-	// 	UE_LOG(LogTemp, Error, TEXT("AuthenticateHVAC: Invalid payload length."));
-	// 	return false;
-	// }
+	const TArray<uint8> Prefix(MessageData, PrefixLen);
+	TArray<uint8> ComputedHmac = CalculateHMAC(Prefix, GameToken);
 
-	// // Extract Payload (ignoring header and HVAC)
-	// TArray<uint8> ExtractedPayload;
-	// ExtractedPayload.Append(ReceivedMessage.GetData(), PayloadSize);
+	if (ComputedHmac.Num() != HmacSize)
+	{
+		return false;
+	}
 
-	// // Extract Received HVAC (last 32 bytes)
-	// TArray<uint8> ReceivedHMAC;
-	// ReceivedHMAC.Append(ReceivedMessage.GetData() + ReceivedMessage.Num() - HMAC_Size, HMAC_Size);
-
-	// // Recalculate HVAC
-	// const TArray<uint8> CalculatedHVAC = UFL_Serialization::CalculateHMAC(ExtractedPayload, GameToken);
-
-
-	// // Compare both
-	// if (ReceivedHMAC == CalculatedHVAC)
-	// {
-	// 	//UE_LOG(LogUDPService, Log, TEXT("AuthenticateHVAC: HVAC authentication successful."));
-	// 	return true;
-	// }
-
-	// //UE_LOG(LogUDPService, Error, TEXT("AuthenticateHVAC: HVAC authentication failed."));
-	// return false;
+	return CRYPTO_memcmp(ComputedHmac.GetData(), ReceivedHmac, HmacSize) == 0;
 }
 
 bool USerializationFunctionLibrary::ExtractChunkCoordinates(const TSharedPtr<FJsonObject>& JsonObj, int64& X, int64& Y,
-	int64& Z)
+                                                            int64& Z)
 {
 	const TSharedPtr<FJsonObject>* Coordinates;
 
@@ -192,12 +196,12 @@ FGuid USerializationFunctionLibrary::ToGuid(const FString& String)
 	const uint32 B = ParseHex(Data + 8, 8);
 	const uint32 C = ParseHex(Data + 16, 8);
 	const uint32 D = ParseHex(Data + 24, 8);
-	
+
 	return FGuid(A, B, C, D);
 }
 
 FString USerializationFunctionLibrary::GenerateVoxelID(int64 ChunkX, int64 ChunkY, int64 ChunkZ, int32 VoxelX,
-	int32 VoxelY, int32 VoxelZ)
+                                                       int32 VoxelY, int32 VoxelZ)
 {
 	const FString Input = FString::Printf(
 		TEXT("%lld,%lld,%lld,%d,%d,%d"),
@@ -206,17 +210,17 @@ FString USerializationFunctionLibrary::GenerateVoxelID(int64 ChunkX, int64 Chunk
 
 	// Convert to UTF-8 for hashing
 	const FTCHARToUTF8 UTF8String(*Input);
-	
+
 	// Calculate SHA256 hash using OpenSSL
 	unsigned char HashBytes[SHA256_DIGEST_LENGTH];
 	SHA256(reinterpret_cast<const unsigned char*>(UTF8String.Get()), UTF8String.Length(), HashBytes);
-	
+
 	// Convert hash to hex string
 	FString Result;
 	for (int32 i = 0; i < SHA256_DIGEST_LENGTH; ++i)
 	{
 		Result += FString::Printf(TEXT("%02x"), HashBytes[i]);
 	}
-	
+
 	return Result;
 }

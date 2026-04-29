@@ -139,6 +139,7 @@ public:
 	 *         If the conversion fails, an appropriate exception or error may be thrown
 	 *         depending on the implementation.
 	 */
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Serialization Function Library")
 	static FGuid ToGuid(const FString& String);
 
 	/**

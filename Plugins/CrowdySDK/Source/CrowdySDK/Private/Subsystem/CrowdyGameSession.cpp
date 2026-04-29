@@ -7,17 +7,28 @@ void UCrowdyGameSession::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: Game Session Initialized."))
+	SendEvent = FPlatformProcess::GetSynchEventFromPool(false);
+	ReceiveEvent = FPlatformProcess::GetSynchEventFromPool(false);
 }
 
 void UCrowdyGameSession::Deinitialize()
 {
+	if (SendEvent)    SendEvent->Trigger();
+	if (ReceiveEvent) ReceiveEvent->Trigger();
+	
+	FPlatformProcess::ReturnSynchEventToPool(SendEvent);
+	FPlatformProcess::ReturnSynchEventToPool(ReceiveEvent);
+	ReceiveEvent = nullptr;
+	SendEvent = nullptr;
 	Super::Deinitialize();
 }
 
 bool UCrowdyGameSession::EnqueueMessageToSend(TArray<uint8>&& Message)
 {
 	++SendCounter;
-	return SendQueue.Enqueue(MoveTemp(Message));
+	const bool bResult = SendQueue.Enqueue(MoveTemp(Message));
+	SendEvent->Trigger();
+	return bResult;
 }
 
 bool UCrowdyGameSession::DequeueMessageToSend(TArray<uint8>& OutMessage)
@@ -34,6 +45,10 @@ void UCrowdyGameSession::EnqueueMessageToReceive(const TArray<uint8>& Message)
 {
 	FScopeLock Lock(&ReceiveQueueMutex);
 	ReceiveQueue.Enqueue(Message);
+	if (ReceiveEvent)
+	{
+		ReceiveEvent->Trigger();
+	}
 	++ReceiveCounter;
 }
 
@@ -56,4 +71,14 @@ bool UCrowdyGameSession::HasPendingIncomingMessages() const
 bool UCrowdyGameSession::HasPendingOutgoingMessages() const
 {
 	return !SendQueue.IsEmpty();
+}
+
+FEvent* UCrowdyGameSession::GetSendEvent() const
+{
+	return SendEvent;
+}
+
+FEvent* UCrowdyGameSession::GetReceiveEvent() const
+{
+	return ReceiveEvent;
 }

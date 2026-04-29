@@ -5,7 +5,7 @@
 #include "Utils/SerializationFunctionLibrary.h"
 
 /**
- * @class FGameObjectActivationRequest
+
  * @brief Represents a request to activate or deactivate a game object within the system.
  *
  * The FGameObjectActivationRequest class encapsulates the data and logic needed to manage
@@ -170,7 +170,7 @@ struct FGameObjectActivationRequest : ICrowdyMessage
 	 * @param Data A reference to an array of bytes representing serialized data
 	 *             that should be deserialized to initialize the object's state.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		return;
 	}

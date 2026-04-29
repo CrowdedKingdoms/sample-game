@@ -73,9 +73,9 @@ struct FDefaultMessage : ICrowdyMessage
 	 * @param Data A reference to an array of bytes representing the serialized input data
 	 *             that should be deserialized.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
-		return;
+		return false;
 	}
 
 	/**

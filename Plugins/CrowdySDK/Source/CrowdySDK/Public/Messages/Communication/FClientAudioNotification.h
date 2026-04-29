@@ -11,10 +11,6 @@ struct FClientAudioNotificationFrame
 
 struct FClientAudioNotification : ICrowdyMessage
 {
-	int64 MapID;
-	FInt64Vector ChunkCoordinates;
-	FString UUID;
-	
 	int32 SampleRate;
 	int32 NumChannels;
 	
@@ -35,53 +31,44 @@ struct FClientAudioNotification : ICrowdyMessage
 		return TArray<uint8>();
 	}
 	
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		int32 Offset = 0;
 
-		// MapID
-		if (Offset + sizeof(int64) > Data.Num()) return;
-		FMemory::Memcpy(&MapID, Data.GetData() + Offset, sizeof(int64));
-		Offset += sizeof(int64);
-
-		// Chunk coords
-		if (Offset + sizeof(int64) * 3 > Data.Num()) return;
-		FMemory::Memcpy(&ChunkCoordinates.X, Data.GetData() + Offset, sizeof(int64));
-		Offset += sizeof(int64);
-		FMemory::Memcpy(&ChunkCoordinates.Y, Data.GetData() + Offset, sizeof(int64));
-		Offset += sizeof(int64);
-		FMemory::Memcpy(&ChunkCoordinates.Z, Data.GetData() + Offset, sizeof(int64));
-		Offset += sizeof(int64);
-
-		// UUID (32 bytes)
-		if (Offset + 32 > Data.Num()) return;
+		if (!DeserializeMetadata(Data, Offset))
 		{
-			const char* UUIDPtr = reinterpret_cast<const char*>(Data.GetData() + Offset);
-			const FUTF8ToTCHAR UTF8Converter(UUIDPtr, 32);
-			UUID = FString(UTF8Converter.Length(), UTF8Converter.Get());
-			Offset += 32;
+			UE_LOG(LogTemp, Warning, TEXT("FClientAudioNotification::Deserialize - Metadata deserialization failed"));
+			return false;
 		}
 
 		// SampleRate
-		if (Offset + sizeof(int32) > Data.Num()) return;
-		FMemory::Memcpy(&SampleRate, Data.GetData() + Offset, sizeof(int32));
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, SampleRate, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FClientAudioNotification::Deserialize - SampleRate deserialization failed"));
+			return false;
+		}
 		Offset += sizeof(int32);
-
-		// NumChannels
-		if (Offset + sizeof(int32) > Data.Num()) return;
-		FMemory::Memcpy(&NumChannels, Data.GetData() + Offset, sizeof(int32));
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, NumChannels, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FClientAudioNotification::Deserialize - NumChannels deserialization failed"));
+			return false;
+		}
 		Offset += sizeof(int32);
-
-		// Frame count
-		if (Offset + sizeof(int32) > Data.Num()) return;
+		
 		int32 FrameCount = 0;
-		FMemory::Memcpy(&FrameCount, Data.GetData() + Offset, sizeof(int32));
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, FrameCount, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FClientAudioNotification::Deserialize - FrameCount deserialization failed"));
+			return false;
+		}
 		Offset += sizeof(int32);
+		
 
 		if (FrameCount <= 0 || FrameCount > 100)
 		{
 			Frames.Empty();
-			return;
+			return false;
 		}
 
 		Frames.Empty(FrameCount);
@@ -99,7 +86,7 @@ struct FClientAudioNotification : ICrowdyMessage
 
 			if (Frame.FrameSize <= 0 || Offset + Frame.FrameSize > Data.Num())
 			{
-				break;
+				return false;
 			}
 
 			Frame.AudioData.SetNumUninitialized(Frame.FrameSize);
@@ -108,6 +95,7 @@ struct FClientAudioNotification : ICrowdyMessage
 
 			Frames.Add(MoveTemp(Frame));
 		}
+		return true;
 	}
 	
 	virtual uint32 GetMessageSize() const override

@@ -5,7 +5,7 @@
 #include "Utils/SerializationFunctionLibrary.h"
 
 /**
- * @class FGameObjectActivationNotification
+
  * @brief Encapsulates activation and deactivation notifications for a game object.
  *
  * The FGameObjectActivationNotification class is responsible for tracking and
@@ -125,10 +125,10 @@ struct FGameObjectActivationNotification : ICrowdyMessage
 	 * @param Data A reference to a TArray of uint8 containing the serialized data
 	 *             to be deserialized.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
 		if (Data.Num() <= 0)
-			return;
+			return false;
 		
 		int32 Offset = 0;
 		
@@ -152,6 +152,8 @@ struct FGameObjectActivationNotification : ICrowdyMessage
 		Offset += sizeof(StateSize);
 		
 		FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+		
+		return true;
 	}
 
 	/**

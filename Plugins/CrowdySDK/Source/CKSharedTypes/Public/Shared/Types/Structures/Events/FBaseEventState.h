@@ -10,16 +10,16 @@ struct FBaseEventState
 	
 	// Common properties all events might have
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
-	FVector Location;
+	FVector Location = FVector(0.0f, 0.0f, 0.0f);
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
-	FRotator Rotation;
+	FRotator Rotation = FRotator(0.0f, 0.0f, 0.0f);
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
 	FVector Scale = FVector(1.0f, 1.0f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
-	int64 Timestamp;
+	int64 Timestamp = 0;
 	
 	// Virtual destructor for proper cleanup
 	virtual ~FBaseEventState() {}
@@ -35,8 +35,8 @@ struct FBallState : public FBaseEventState
 	uint8 Version = 1;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
-	FVector Velocity;
+	FVector Velocity = FVector(0.0f, 0.0f, 0.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Game Event")
-	float InitialSpeed;
+	float InitialSpeed = 0.0f;
 };

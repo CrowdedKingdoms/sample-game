@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Templates/SharedPointer.h"
+#include "HAL/PlatformAtomics.h"
 
 enum class ECrowdyMessageType : uint8;
 class ICrowdyService;
@@ -20,6 +21,8 @@ public:
 	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer);
 	
+	void DeregisterAllReceptionLayers();
+	
 	void DispatchMessage(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
 	
 private:
@@ -30,6 +33,7 @@ private:
 	/** All Message Listeners **/
 	TArray<ICrowdyReceptionLayer*> ReceptionLayers;
 	
-	TMap<ECrowdyMessageType, ICrowdyReceptionLayer*> ReceptionLayersByType;
+	/** Map of message type to reception layers */
+	TMap<ECrowdyMessageType, TArray<ICrowdyReceptionLayer*>> ReceptionLayersByType;
 	
 };

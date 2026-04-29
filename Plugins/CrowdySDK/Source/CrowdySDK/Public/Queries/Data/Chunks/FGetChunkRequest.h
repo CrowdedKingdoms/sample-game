@@ -4,7 +4,7 @@
 
 struct FGetChunkRequest : ICrowdyQueryRequest
 {
-	int64 MapID;
+	int64 AppID;
 	int64 ChunkX;
 	int64 ChunkY;
 	int64 ChunkZ;
@@ -19,7 +19,7 @@ struct FGetChunkRequest : ICrowdyQueryRequest
 	
 	virtual void PrepareQuery() override
 	{
-		RuntimeVariables.Add(TEXT("input.mapId"), FString::Printf(TEXT("%lld"), MapID));
+		RuntimeVariables.Add(TEXT("input.appId"), FString::Printf(TEXT("%lld"), AppID));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.x"), FString::Printf(TEXT("%lld"), ChunkX));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.y"), FString::Printf(TEXT("%lld"), ChunkY));
 		RuntimeVariables.Add(TEXT("input.centerCoordinate.z"), FString::Printf(TEXT("%lld"), ChunkZ));
@@ -37,6 +37,6 @@ struct FGetChunkRequest : ICrowdyQueryRequest
 	}
 	virtual bool IsValid() const override
 	{
-		return MapID > -1 && RuntimeVariables.Num() == 6;
+		return AppID > -1 && RuntimeVariables.Num() == 6;
 	}
 };

@@ -1,93 +1,170 @@
 ﻿#pragma once
 #include "CoreMinimal.h"
-/**
- * @enum ECrowdyMessageType
- * @brief An enumeration defining various types of messages used within the Crowdy SDK.
- *
- * This enumeration is used to differentiate between different kinds of messages passed between
- * systems or components. Each message type represents a distinct purpose or semantic meaning.
- *
- * The underlying type of the enumeration is `uint8`.
- *
- * Enumerators include (but are not limited to):
- * - BAD_MESSAGE: Represents an invalid or unrecognized message.
- * - ACTOR_UPDATE_REQUEST: A request to update an actor's state.
- * - ACTOR_UPDATE_RESPONSE: A response to an actor update request.
- * - ACTOR_UPDATE_NOTIFICATION: A notification about an actor state update.
- * - VOXEL_UPDATE_REQUEST: A request to update voxel data.
- * - VOXEL_UPDATE_RESPONSE: A response to a voxel update request.
- * - VOXEL_UPDATE_NOTIFICATION: A notification about voxel data updates.
- * - CLIENT_AUDIO_PACKET: A packet representing client audio data.
- * - CLIENT_AUDIO_NOTIFICATION: A notification regarding client audio.
- * - CLIENT_TEXT_PACKET: A packet representing client text data.
- * - CLIENT_TEXT_NOTIFICATION: A notification regarding client text.
- * - CLIENT_EVENT_NOTIFICATION: A notification about a client-generated event.
- * - SERVER_EVENT_NOTIFICATION: A notification about a server-generated event.
- */
 #include "Core/UDP/Enums/ECrowdyMessageType.h"
+#include "Utils/SerializationFunctionLibrary.h"
 
+constexpr  int32 MetadataSize =  sizeof(int64)    // MapID
+		+ sizeof(int64)  // ChunkX
+		+ sizeof(int64)  // ChunkY
+		+ sizeof(int64)  // ChunkZ
+		+ sizeof(uint8)  // ReplicationDistance
+		+ sizeof(uint8)  // DecayRate
+		+ sizeof(uint8)  // bContainsAuth
+		+ 32;            // UUID string
+
+constexpr int32 TailSize = sizeof(int64) + sizeof(uint8);
 /**
  * Interface representing a generic message in the Crowdy system.
  */
 class CROWDYSDK_API ICrowdyMessage
 {
 public:
-	/**
-	 * Virtual destructor for the ICrowdyMessage interface.
-	 *
-	 * Ensures proper cleanup of resources in derived classes that implement
-	 * the ICrowdyMessage interface. As a virtual destructor, it guarantees that
-	 * the destructor of the derived class is called when an instance is deleted
-	 * through a pointer to the base class.
-	 */
+	
+	FString UUID;
+	
+	int64 AppID = 0;
+	int64 ChunkX = 0;
+	int64 ChunkY = 0;
+	int64 ChunkZ = 0;
+	int64 GameTokenID = 0;
+	int64 Timestamp = 0;
+	
+	ECrowdyReplicationDistance ReplicationDistance = ECrowdyReplicationDistance::Eight_Chunks;
+	ECrowdyDecayRate DecayRate = ECrowdyDecayRate::No_Decay;
+	uint8 SequenceNumber = 0;
+	bool bContainsAuth = true;
+	
+public:
+	
 	virtual ~ICrowdyMessage() = default;
-	/**
-	 * Retrieves the specific type of the message.
-	 *
-	 * This pure virtual function must be overridden by derived classes.
-	 * It is used to determine the type of the message, which is represented
-	 * as an ECrowdyMessageType enumerator. The returned type can be used
-	 * for message handling and processing, allowing different components or
-	 * layers to identify and handle messages appropriately based on their type.
-	 *
-	 * @return The type of the message as an ECrowdyMessageType enumerator.
-	 */
+	
 	virtual ECrowdyMessageType GetType() const = 0;
-	/**
-	 * Retrieves the name of the message type.
-	 *
-	 * This function must be implemented by all derived classes of ICrowdyMessage.
-	 * It is used to return an FName identifier for the specific type of message.
-	 *
-	 * @return An FName instance that represents the unique name of the message type.
-	 */
+	
 	virtual FName GetTypeName() const = 0;
-
-	/**
-	 * Serializes the message into a byte array.
-	 *
-	 * @return A TArray of uint8 containing the serialized data representation
-	 * of the message.
-	 *
-	 * @note This method must be implemented by derived classes to define
-	 * the serialization logic for specific message types.
-	 */
+	
 	virtual TArray<uint8> Serialize() const = 0;
-	/**
-	 * Parses and initializes the object's state using the provided binary data.
-	 *
-	 * @param Data A reference to an array of bytes representing serialized data
-	 *             that should be deserialized to reconstruct the object's state.
-	 */
-	virtual void Deserialize(const TArray<uint8>& Data) = 0;
-	/**
-	 * @brief Retrieves the size of the message in bytes.
-	 *
-	 * This method is a pure virtual function that must be implemented by derived classes.
-	 * It provides the total size of the message, typically used for serialization or
-	 * network transmission purposes.
-	 *
-	 * @return The size of the message in bytes as a 32-bit unsigned integer.
-	 */
+	
+	virtual [[nodiscard]] bool Deserialize(const TArray<uint8>& Data) = 0;
+	
 	virtual uint32 GetMessageSize() const = 0;
+	
+protected:
+	
+	FORCEINLINE TArray<uint8> SerializeMetadata() const
+	{
+		TArray<uint8> Data;
+		Data.Reserve(MetadataSize + 1); // +1 for type byte
+		
+		Data.Add(static_cast<uint8>(GetType()));
+		Data.Append(USerializationFunctionLibrary::SerializeValue(AppID));
+		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkX));
+		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkY));
+		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkZ));
+		Data.Add(static_cast<uint8>(ReplicationDistance));
+		Data.Add(static_cast<uint8>(DecayRate));
+		Data.Add(bContainsAuth ? static_cast<uint8>(1) : static_cast<uint8>(0));
+
+		const FTCHARToUTF8 ConvertedUUID(*UUID);
+		Data.Append(reinterpret_cast<const uint8*>(ConvertedUUID.Get()), ConvertedUUID.Length());
+
+		return Data;
+	}
+	
+	FORCEINLINE [[nodiscard]] bool DeserializeMetadata(const TArray<uint8>& Data, int32& Offset)
+	{
+		if (!ensureMsgf(Data.Num() >= Offset + MetadataSize + TailSize, 
+			TEXT("DeserializeMetadata: Buffer too small. Have %d bytes, need at least %d from offset %d"),
+			Data.Num(), Offset + MetadataSize + TailSize, Offset))
+		{
+			return false;
+		}
+		
+		int32 LocalOffset = Offset;
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, AppID, LocalOffset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("DeserializeMetadata: Failed to deserialize MapID"));	
+			return false;
+		}
+		
+		LocalOffset += sizeof(int64);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, ChunkX, LocalOffset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("DeserializeMetadata: Failed to deserialize ChunkX"));	
+			return false;
+		}
+		
+		LocalOffset+= sizeof(int64);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, ChunkY, LocalOffset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("DeserializeMetadata: Failed to deserialize ChunkY"))
+			return false;
+		}
+		
+		LocalOffset += sizeof(int64);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ, LocalOffset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("DeserializeMetadata: Failed to read ChunkZ at offset %d"), LocalOffset);
+			return false;
+		}
+		LocalOffset += sizeof(int64);
+		
+		ReplicationDistance = static_cast<ECrowdyReplicationDistance>(Data[LocalOffset]);
+		LocalOffset += sizeof(uint8);
+
+		DecayRate = static_cast<ECrowdyDecayRate>(Data[LocalOffset]);
+		LocalOffset += sizeof(uint8);
+
+		bContainsAuth = Data[LocalOffset] != 0;
+		LocalOffset += sizeof(uint8);
+		
+		FString DeserializedUUID = USerializationFunctionLibrary::DeserializeString(Data, LocalOffset, 32);
+		if (!ensureMsgf(
+			DeserializedUUID.Len() == 32,
+			TEXT("DeserializeMetadata: UUID deserialization returned unexpected length %d (expected 32)"),
+			DeserializedUUID.Len()))
+		{
+			return false;
+		}
+		
+		UUID = MoveTemp(DeserializedUUID);
+		LocalOffset += 32;
+		
+		Offset = LocalOffset;
+		
+		return ExtractTailData(Data);
+	}
+	
+private:
+	
+	FORCEINLINE [[nodiscard]] bool ExtractTailData(const TArray<uint8>& Data)
+	{
+		if (!ensureMsgf(
+			Data.Num() >= TailSize,
+			TEXT("ExtractTailData: Buffer too small for tail. Have %d bytes, need %d."),
+			Data.Num(), TailSize))
+		{
+			return false;
+		}
+		
+		// Tail is always anchored to the end of the buffer regardless of payload size
+		int32 TempOffset = Data.Num() - TailSize;
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, Timestamp, TempOffset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("ExtractTailData: Failed to read Timestamp at offset %d"), TempOffset);
+			return false;
+		}
+		TempOffset += sizeof(int64);
+		
+		// Final byte is within the validated tail window
+		SequenceNumber = Data[TempOffset];
+
+		return true;
+		
+	}
+	
 };

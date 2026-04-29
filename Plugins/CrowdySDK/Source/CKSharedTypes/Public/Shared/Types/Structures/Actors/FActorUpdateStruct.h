@@ -27,4 +27,7 @@ struct FActorUpdateStruct
         
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActorState")
 	FActorState State;
+	
+	FActorUpdateStruct(): ChunkX(0), ChunkY(0), ChunkZ(0), UUID(FGuid::NewGuid())
+	{}
 };

@@ -11,49 +11,13 @@
 struct FGameEventRequest : ICrowdyMessage
 {
 	
-	/**
-	 * @brief Represents the unique identifier for a map in the messaging system.
-	 *
-	 * This variable is used to uniquely identify a specific map within the context
-	 * of a message or event. The value is typically serialized as part of the message
-	 * data to ensure map-specific operations or tracking can be performed.
-	 *
-	 * Integral to message serialization and deserialization, the `MapID` is a 64-bit signed
-	 * integer and plays a critical role in differentiating maps within the application.
-	 */
-	int64 MapID;
-	/**
-	 * @brief Represents the X-coordinate of a chunk in a 3D spatial grid.
-	 *
-	 * This variable is used in conjunction with ChunkY and ChunkZ to define a
-	 * specific chunk's position within a three-dimensional grid. Typically, chunks
-	 * are part of spatial partitioning used to organize or manage data or objects
-	 * within a large virtual space.
-	 *
-	 * @note This is a 64-bit integer to accommodate large coordinate values,
-	 * which may be required in expansive environments or systems handling high-resolution grids.
-	 */
-	int64 ChunkX, ChunkY, ChunkZ;
-	/**
-	 * A unique identifier for the activator of the event.
-	 *
-	 * This string represents the UUID associated with the entity or system
-	 * that initiated or triggered the event. It is typically used for
-	 * identifying the source of the event in a distributed system or
-	 * event-handling framework. The UUID should adhere to standardized
-	 * UUID format and be unique across all events.
-	 */
-	FString ActivatorUUID;
-	/**
-	 * Represents the category or classification of an event.
-	 */
 	uint16 EventType = 0;
+	
 	/**
 	 * Represents the current status or condition of an object, system, or process.
 	 */
 	int32 StateSize;
 	TArray<uint8> StateBytes;
-	
 	
 	
 	/**
@@ -83,17 +47,8 @@ struct FGameEventRequest : ICrowdyMessage
 	 */
 	virtual TArray<uint8> Serialize() const override
 	{
-		TArray<uint8> Data;
+		TArray<uint8> Data = SerializeMetadata();
 		
-		Data.Add(static_cast<uint32>(GetType()) & 0xFF);
-		Data.Append(USerializationFunctionLibrary::SerializeValue(MapID));
-		
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkX));
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkY));
-		Data.Append(USerializationFunctionLibrary::SerializeValue(ChunkZ));
-		
-		const FTCHARToUTF8 ConvertedUUID(*ActivatorUUID);
-		Data.Append(reinterpret_cast<const uint8*>(ConvertedUUID.Get()), ConvertedUUID.Length());
 		Data.Append(USerializationFunctionLibrary::SerializeValue(EventType));
 		Data.Append(USerializationFunctionLibrary::SerializeValue(StateSize));
 		Data.Append(StateBytes);
@@ -107,9 +62,9 @@ struct FGameEventRequest : ICrowdyMessage
 	 * @param format The format or schema used during the serialization process, if applicable.
 	 * @return The reconstructed object or data structure.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
-		return;
+		return false;
 	}
 
 	/**
@@ -130,7 +85,7 @@ struct FGameEventRequest : ICrowdyMessage
 	 */
 	virtual uint32 GetMessageSize() const override
 	{
-		return sizeof(MapID) + sizeof(int64)*3 + 32 + sizeof(EventType) + StateSize;
+		return sizeof(AppID) + sizeof(int64)*3 + 32 + sizeof(EventType) + StateSize;
 	}
 
 	

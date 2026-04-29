@@ -9,24 +9,48 @@ void FCrowdyServiceRegistry::RegisterService(FName Name, ICrowdyService* Service
 
 void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer)
 {
+	
+	if (!Layer)
+		return;
+	
+	if (!Layer) return;
+
 	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
-	for (const auto Type : SupportedTypes)
+	
+	for (ECrowdyMessageType Type : SupportedTypes)
 	{
-		ReceptionLayersByType.Add(Type, Layer);
+		// Preallocate small buffer to avoid reallocations
+		if (!ReceptionLayersByType.Contains(Type))
+		{
+			ReceptionLayersByType.Add(Type, TArray<ICrowdyReceptionLayer*>());
+			ReceptionLayersByType[Type].Reserve(8);
+		}
+
+		ReceptionLayersByType[Type].Add(Layer);
 	}
 }
+
+void FCrowdyServiceRegistry::DeregisterAllReceptionLayers()
+{
+	ReceptionLayersByType.Empty();
+	UE_LOG(LogTemp, Log, TEXT("Deregistered all reception layers."));
+}
+
 
 void FCrowdyServiceRegistry::DispatchMessage(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message)
 {
 
 	const auto ResponseType = Message->GetType();
-	
-	ICrowdyReceptionLayer* ReceptionLayer = ReceptionLayersByType.FindRef(ResponseType);
-	
-	if (!ReceptionLayer)
+
+	if (TArray<ICrowdyReceptionLayer*>* Layers = ReceptionLayersByType.Find(ResponseType))
 	{
-		return;
+		// Iterate safely
+		for (ICrowdyReceptionLayer* Layer : *Layers)
+		{
+			if (Layer)
+			{
+				Layer->OnMessageReceived(Message);
+			}
+		}
 	}
-	
-	ReceptionLayer->OnMessageReceived(Message);
 }

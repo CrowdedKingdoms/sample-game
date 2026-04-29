@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/GraphQL/Interfaces/ICrowdyQueryReceptionLayer.h"
+#include "Core/UDP/Interfaces/ICrowdyReceptionLayer.h"
 #include "Shared/Types/Structures/Versioning/FGameVersion.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "CrowdySDKSubsystem.generated.h"
@@ -51,12 +52,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnVersionInfo, FGameVersion, Serve
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUDPConnectionSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnUDPTimedOut);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTeleportPermission, bool, bAllowed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCrowdyHUDReady);
 
 /**
  *
  */
-UCLASS(BlueprintType)
-class CROWDYSDK_API UCrowdySDKSubsystem : public UGameInstanceSubsystem, public ICrowdyQueryReceptionLayer
+UCLASS(BlueprintType, meta = (DisplayName = "Crowdy SDK Subsystem"))
+class CROWDYSDK_API UCrowdySDKSubsystem : public UGameInstanceSubsystem, public ICrowdyQueryReceptionLayer, public ICrowdyReceptionLayer
 {
 	GENERATED_BODY()
 	
@@ -74,20 +76,23 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Authentication")
 	FOnLogout OnLogout;
 	
-	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Authentication")
+	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Authentication", meta=(DisplayName="On UDP Address Notify"))
 	FOnUDPAddressNotify OnUDPAddressNotify;
 	
 	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Authentication")
 	FOnVersionInfo OnVersionInfo;
 	
-	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Connection")
+	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Connection", meta=(DisplayName="On UDP Connection Success"))
 	FOnUDPConnectionSuccess OnUDPConnectionSuccess;
 	
-	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Connection")
+	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|Connection", meta=(DisplayName="On UDP Timed Out"))
 	FOnUDPTimedOut OnUDPTimedOut;
 	
 	UPROPERTY(BlueprintAssignable, Category= "CrowdySDK|Permissions")
 	FOnTeleportPermission OnTeleportPermission;
+	
+	UPROPERTY(BlueprintAssignable, Category = "CrowdySDK|HUD", meta=(DisplayName="Crowdy HUD Ready"))
+	FOnCrowdyHUDReady OnCrowdyHUDReady;
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
 	void Login(const FString Email, const FString Password) const;
@@ -101,7 +106,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
 	void SetGameSessionInfo(const FGameSessionInfo GameSessionInfo);
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication", meta=(DisplayName="Request UDP Access"))
 	void RequestUDPAccess() const;
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
@@ -110,11 +115,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
 	void SetQueryEndpoint(const FString InEndpoint) const;
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
-	void StartUDPTimeoutMonitoring(const float ThresholdSeconds = 30.0f) const;
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection", meta=(DisplayName="Start UDP Timeout Monitoring"))
+	void StartUDPTimeoutMonitoring(const float ThresholdSeconds = 30.0f);
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
-	void StopUDPTimeoutMonitoring() const;
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection", meta=(DisplayName="Stop UDP Timeout Monitoring"))
+	void StopUDPTimeoutMonitoring();
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
 	void StopNetworkOperations() const;
@@ -122,7 +127,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
 	void ToggleNetworkMessageProcessing() const;
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection", meta=(DisplayName="Trigger UDP Heartbeat"))
 	void TriggerUdpHeartbeat() const;
 	
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Communication")
@@ -147,11 +152,17 @@ public:
 	void RequestTeleportPermission(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ, const int32 VoxelX,
 	                               const int32 VoxelY, const int32 VoxelZ) const;
 	
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Reception Layer")
+	void DeregisterAllReceptionLayers();
+	
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Subsystem")
+	void SetExpectedActorUpdateStateSize(const int32 InSize) const;
+	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const;
 	void RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer* LayerToRegister) const;
 	
 	void SendMessage(const ICrowdyMessage& Message) const;
-	
+
 	void ExecuteQuery(ICrowdyQueryRequest& Query) const;
 	
 	inline void SetTransmissionLayer(ICrowdyTransmissionLayer* Layer);
@@ -159,6 +170,9 @@ public:
 
 	virtual void OnResponseReceived(TSharedPtr<ICrowdyQueryResponse> Response) override;
 	virtual TArray<EQueryResponseType> GetSupportedResponseType() const override; 
+	
+	virtual void OnMessageReceived(TSharedRef<ICrowdyMessage> Message) override;
+	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const override;
 
 	
 private:
@@ -192,6 +206,12 @@ private:
 	FCrowdyQueryParser* QueryParser;
 	ICrowdyQueryTransmissionLayer* QueryTransmissionLayer;
 	
+	FTimerHandle PingMessageTimerHandle;
+	bool bIsRegistered = false;
+	
+	UPROPERTY()
+	int32 ExpectedActorUpdateStateSize = 300;
+	
 	void HandleLogin(const FLoginResponse& LoginResponse) const;
 	void HandleRegister(const FRegisterResponse& RegisterResponse) const;
 	void HandleUDPAddressNotify(const FUDPAddressNotify& UDPAddressNotify) const;
@@ -204,4 +224,7 @@ private:
 	
 	UFUNCTION()
 	void OnUDPConnectionSuccessful();
+	
+	UFUNCTION()
+	void SendPingTestMessage();
 };

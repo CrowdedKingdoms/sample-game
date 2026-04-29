@@ -18,7 +18,19 @@ void UCrowdyWorkerThreadsSubsystem::Deinitialize()
 {
 	bShouldRun = false;
 	bProcessMainThread = false;
+	
+	// Wake up both blocked threads so they can see bProcessMainThread == false
+	if (IsValid(GameSession))
+	{
+		if (FEvent* SE = GameSession->GetSendEvent())    SE->Trigger();
+		if (FEvent* RE = GameSession->GetReceiveEvent()) RE->Trigger();
+	}
+	
 	StopAllProcesses();
+	
+	GameSession   = nullptr;
+	UDPSubsystem  = nullptr;
+	
 	Super::Deinitialize();
 }
 
@@ -131,19 +143,15 @@ void UCrowdyWorkerThreadsSubsystem::RunSendLoop() const
 	{
 		while (bProcessMainThread)
 		{
-			bool bProcessedMessage = false;
+			FEvent* Event = GameSession ? GameSession->GetSendEvent() : nullptr;
+			if (!Event) break;
 
-			if (GameSession->HasPendingOutgoingMessages())
-			{
-				ProcessOutgoingMessages();
-				bProcessedMessage = true;
-			}
-
-			// Only sleep if no message was processed
-			if (!bProcessedMessage)
-			{
-				FPlatformProcess::YieldThread();
-			}
+			Event->Wait();
+			
+			if (!bProcessMainThread) break;
+			if (!IsValid(GameSession) || !IsValid(UDPSubsystem)) break;
+			
+			ProcessOutgoingMessages();
 		}
 	});
 }
@@ -155,19 +163,15 @@ void UCrowdyWorkerThreadsSubsystem::RunReceiveLoop()
 	{
 		while (bProcessMainThread)
 		{
-			bool bProcessedMessage = false;
+			FEvent* Event = GameSession ? GameSession->GetReceiveEvent() : nullptr;
+			if (!Event) break;
 
-			if (GameSession->HasPendingIncomingMessages())
-			{
-				ProcessIncomingMessages();
-				bProcessedMessage = true;
-			}
+			Event->Wait();
 
-			// Only sleep if no message was processed
-			if (!bProcessedMessage)
-			{
-				FPlatformProcess::YieldThread();
-			}
+			if (!bProcessMainThread) break;
+			if (!IsValid(GameSession)) break;
+			
+			ProcessIncomingMessages();
 		}
 	});
 }

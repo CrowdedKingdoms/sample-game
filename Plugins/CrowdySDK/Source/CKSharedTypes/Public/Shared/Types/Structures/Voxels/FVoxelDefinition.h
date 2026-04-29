@@ -11,7 +11,7 @@ struct FVoxelDefinition
 	uint8 Version = 1;
 
 	UPROPERTY()
-	uint8 VoxelType;
+	uint8 VoxelType = 0;
 
 	UPROPERTY()
 	FVoxelState VoxelState;

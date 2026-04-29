@@ -22,7 +22,7 @@ struct FTeleportRequest : ICrowdyQueryRequest
 	// TODO: Verify this format and apply corrections later if any
 	virtual void PrepareQuery() override
 	{
-		RuntimeVariables.Add(TEXT("mapId"), FString::Printf(TEXT("%lld"), MapID));
+		RuntimeVariables.Add(TEXT("appId"), FString::Printf(TEXT("%lld"), MapID));
 		RuntimeVariables.Add(TEXT("cx"), FString::Printf(TEXT("%lld"), ChunkX));
 		RuntimeVariables.Add(TEXT("cy"), FString::Printf(TEXT("%lld"), ChunkY));
 		RuntimeVariables.Add(TEXT("cz"), FString::Printf(TEXT("%lld"), ChunkZ));

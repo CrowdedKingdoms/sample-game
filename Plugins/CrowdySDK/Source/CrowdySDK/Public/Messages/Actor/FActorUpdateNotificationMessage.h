@@ -1,8 +1,6 @@
 ﻿#pragma once
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
 #include "Core/UDP/Enums/ECrowdyMessageType.h"
-#include "Shared/Types/Structures/Actors/FActorState.h"
-#include "Shared/Types/Structures/Actors/FActorUpdateStruct.h"
 #include "Utils/SerializationFunctionLibrary.h"
 
 /**
@@ -16,13 +14,9 @@
 struct FActorUpdateNotificationMessage : ICrowdyMessage
 {
 	
-
-	int64 MapID;
-	int64 ChunkX;
-	int64 ChunkY;
-	int64 ChunkZ;
-	FGuid UUID;
+	FGuid GUID;
 	int32 StateSize;
+	int32 ExpectedStateSize = 300;
 	TArray<uint8> StateBytes;
 	
 	
@@ -62,30 +56,46 @@ struct FActorUpdateNotificationMessage : ICrowdyMessage
 	 *
 	 * @param Data The serialized data to be deserialized.
 	 */
-	virtual void Deserialize(const TArray<uint8>& Data) override
+	virtual bool Deserialize(const TArray<uint8>& Data) override
 	{
-		if (Data.Num() < sizeof(int64) * 3 + 32 + sizeof(int32))
-			return;
-		
 		int32 Offset = 0;
 		
-		USerializationFunctionLibrary::DeserializeValue(Data, MapID, Offset);
-		Offset += sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkX, Offset);
-		Offset+= sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkY, Offset);
-		Offset+= sizeof(int64);
-		USerializationFunctionLibrary::DeserializeValue(Data, ChunkZ, Offset);
-		Offset+= sizeof(int64);
-		UUID = USerializationFunctionLibrary::ToGuid(
-			USerializationFunctionLibrary::DeserializeString(Data, Offset, 32));
+		if (!DeserializeMetadata(Data, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FActorUpdateNotificationMessage::Deserialize - Metadata deserialization failed"));
+			return false;
+		}
 		
-		Offset += 32;
-		USerializationFunctionLibrary::DeserializeValue(Data, StateSize, Offset);
+		GUID = USerializationFunctionLibrary::ToGuid(UUID);
+		
+		if (!USerializationFunctionLibrary::DeserializeValue(Data, StateSize, Offset))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FActorUpdateNotificationMessage::Deserialize - StateSize deserialization failed"));
+			return false;
+		}
+		
 		Offset += sizeof(StateSize);
+		
+		if (StateSize <= 0 || StateSize != ExpectedStateSize)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FActorUpdateNotificationMessage::Deserialize - StateSize is out of valid range %d expected %d."), 
+			StateSize, ExpectedStateSize);
+			return false;
+		}
+		
+		if (!ensureMsgf(
+			Data.Num() >= Offset + StateSize,
+			TEXT("FActorUpdateNotificationMessage::Deserialize - Buffer too small for state payload. "
+			 "Have %d bytes, need %d (offset %d + stateSize %d)."),
+		Data.Num(), Offset + StateSize, Offset, StateSize))
+		{
+			return false;
+		}
 		
 		StateBytes.SetNumUninitialized(StateSize);
 		FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+		
+		return true;
 	}
 
 	/**
@@ -113,5 +123,6 @@ struct FActorUpdateNotificationMessage : ICrowdyMessage
 	 */
 	virtual uint32 GetMessageSize() const override { return sizeof(int64) * 3 + 32;}
 
+	void SetExpectedStateSize(const int32 Size) { ExpectedStateSize = Size; }
 	
 };

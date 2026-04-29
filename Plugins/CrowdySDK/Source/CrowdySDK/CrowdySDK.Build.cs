@@ -9,6 +9,7 @@ public class CrowdySDK : ModuleRules
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		PrecompileForTargets = PrecompileTargetsType.Any;
 		bUsePrecompiled = false;
+		bUseUnity = false;
 		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
@@ -38,7 +39,10 @@ public class CrowdySDK : ModuleRules
 				"AudioCaptureCore",
 				"AudioMixer",
 				"Voice",
-				"ProceduralMeshComponent"
+				"ProceduralMeshComponent",
+				"UMG",
+				"GameplayTags",
+				"Projects"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
