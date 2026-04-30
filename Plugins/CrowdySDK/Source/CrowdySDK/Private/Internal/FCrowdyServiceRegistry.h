@@ -22,8 +22,11 @@ public:
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer);
 	
 	void DeregisterAllReceptionLayers();
+
+	bool IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const;
 	
 	void DispatchMessage(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
+
 	
 private:
 	

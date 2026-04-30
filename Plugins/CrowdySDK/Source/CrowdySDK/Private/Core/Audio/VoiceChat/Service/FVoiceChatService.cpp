@@ -256,9 +256,9 @@ void FVoiceChatService::SetVoiceChatManagerReference(UVoiceChatSubsystem* InVoic
 	VoiceChatManager = InVoiceChatManager;
 }
 
-void FVoiceChatService::ToggleOwnerEcho()
+void FVoiceChatService::ToggleOwnerEcho(const bool bEnable)
 {
-	bOwnerEcho = !bOwnerEcho;
+	bOwnerEcho = bEnable;
 }
 
 void FVoiceChatService::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)

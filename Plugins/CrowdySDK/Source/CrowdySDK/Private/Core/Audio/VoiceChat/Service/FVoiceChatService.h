@@ -22,7 +22,7 @@ public:
 	void HandleClientAudioNotification(const FClientAudioNotification& ClientAudioNotification);
 	void CleanupDecoder(const FGuid& UUID);
 	void SetVoiceChatManagerReference(UVoiceChatSubsystem* InVoiceChatManager);
-	void ToggleOwnerEcho();
+	void ToggleOwnerEcho(bool bEnable);
 	virtual void OnMessageReceived(TSharedRef<ICrowdyMessage> Message) override;
 	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const override;
 	

@@ -2,12 +2,12 @@
 
 
 #include "FuntionLibraries/NetworkOperations.h"
-#include "Core/Structs/Game/FSampleActorUpdate.h"
+#include "Core/Structs/Game/FSampleActorState.h"
 #include "Messages/Actor/FActorUpdateRequestMessage.h"
 #include "Subsystem/CrowdySDKSubsystem.h"
 
 
-void UNetworkOperations::EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK, const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ, const FString& UUID, const FSampleActorUpdate& ActorUpdate)
+void UNetworkOperations::EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK, const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ, const FString& UUID, const FSampleActorState& ActorState)
 {
 	ensure(IsValid(CrowdySDK));
 	
@@ -34,10 +34,10 @@ void UNetworkOperations::EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK
 	ActorUpdateRequestMessage.UUID = UUID;
 	
 	// Set the state size, helps in deserialization when receiving
-	ActorUpdateRequestMessage.StateSize = FSampleActorUpdate::GetStateSize();
+	ActorUpdateRequestMessage.StateSize = FSampleActorState::GetStateSize();
 	
 	// Serialize the state
-	ActorUpdateRequestMessage.StateBytes = FSampleActorUpdate::Serialize(ActorUpdate);
+	ActorUpdateRequestMessage.StateBytes = FSampleActorState::Serialize(ActorState);
 	
 	// Enqueue Message for send
 	CrowdySDK->SendMessage(ActorUpdateRequestMessage);

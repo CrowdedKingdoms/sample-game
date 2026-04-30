@@ -146,7 +146,7 @@ public:
 	void SetVoiceChatStreamTimeoutThreshold(const float InSeconds);
 	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Communication")
-	void ToggleOwnerEcho() const;
+	void ToggleOwnerEcho(bool bEnable) const;
 	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Permissions")
 	void RequestTeleportPermission(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ, const int32 VoxelX,
@@ -160,6 +160,7 @@ public:
 	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const;
 	void RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer* LayerToRegister) const;
+	bool IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const;
 	
 	void SendMessage(const ICrowdyMessage& Message) const;
 

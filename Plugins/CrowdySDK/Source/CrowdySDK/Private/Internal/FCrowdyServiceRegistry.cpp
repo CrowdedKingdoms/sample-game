@@ -36,6 +36,26 @@ void FCrowdyServiceRegistry::DeregisterAllReceptionLayers()
 	UE_LOG(LogTemp, Log, TEXT("Deregistered all reception layers."));
 }
 
+bool FCrowdyServiceRegistry::IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const
+{
+	if (!Layer)
+		return false;
+	
+	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
+	
+	for (const ECrowdyMessageType Type : SupportedTypes)
+	{
+		if (!ReceptionLayersByType.Contains(Type))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[CrowdyServiceRegistry]: Layer Not registered"));
+			return false;
+		}
+			
+	}
+	
+	return true;
+}
+
 
 void FCrowdyServiceRegistry::DispatchMessage(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message)
 {

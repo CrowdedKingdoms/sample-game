@@ -6,7 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NetworkOperations.generated.h"
 
-struct FSampleActorUpdate;
+struct FSampleActorState;
 class UCrowdySDKSubsystem;
 /**
  * 
@@ -19,7 +19,7 @@ class CROWDYSDKTEST_API UNetworkOperations : public UBlueprintFunctionLibrary
 public:
 	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK Sample|Network Operations")
-	static void EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK, int64 ChunkX, int64 ChunkY, int64 ChunkZ, const FString& UUID, const FSampleActorUpdate& ActorUpdate);
+	static void EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK, int64 ChunkX, int64 ChunkY, int64 ChunkZ, const FString& UUID, const FSampleActorState& ActorState);
 	
 	// TODO: Implement Various Game Events for showcase
 	//static void EnqueueGameEvent();

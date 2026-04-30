@@ -196,24 +196,36 @@ void UCrowdySDKSubsystem::StartVoiceChat()
 {
 	if (ValidateVoiceChatSubsystem())
 		VoiceChatSubsystem->StartVoiceChat();
+	
+	if (!IsLayerRegistered(VoiceChatService))
+		RegisterReceptionLayer(VoiceChatService);
 }
 
 void UCrowdySDKSubsystem::StopVoiceChat()
 {
 	if (ValidateVoiceChatSubsystem())
 		VoiceChatSubsystem->StopVoiceChat();
+	
+	if (!IsLayerRegistered(VoiceChatService))
+		RegisterReceptionLayer(VoiceChatService);
 }
 
 void UCrowdySDKSubsystem::PlayVoiceChat()
 {
 	if (ValidateVoiceChatSubsystem())
 		VoiceChatSubsystem->PlayVoiceChat();
+	
+	if (!IsLayerRegistered(VoiceChatService))
+		RegisterReceptionLayer(VoiceChatService);
 }
 
 void UCrowdySDKSubsystem::MuteVoiceChat()
 {
 	if (ValidateVoiceChatSubsystem())
 		VoiceChatSubsystem->MuteVoiceChat();
+	
+	if (!IsLayerRegistered(VoiceChatService))
+		RegisterReceptionLayer(VoiceChatService);
 }
 
 void UCrowdySDKSubsystem::SetVoiceChatStreamTimeoutThreshold(const float InSeconds)
@@ -222,9 +234,9 @@ void UCrowdySDKSubsystem::SetVoiceChatStreamTimeoutThreshold(const float InSecon
 		VoiceChatSubsystem->SetStreamTimeoutThreshold(InSeconds);
 }
 
-void UCrowdySDKSubsystem::ToggleOwnerEcho() const
+void UCrowdySDKSubsystem::ToggleOwnerEcho(const bool bEnable) const
 {
-	VoiceChatService->ToggleOwnerEcho();
+	VoiceChatService->ToggleOwnerEcho(bEnable);
 }
 
 void UCrowdySDKSubsystem::RequestTeleportPermission(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
@@ -396,6 +408,10 @@ void UCrowdySDKSubsystem::RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer
 	DataRegistry->RegisterLayer(LayerToRegister);
 }
 
+bool UCrowdySDKSubsystem::IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const
+{
+	return ServiceRegistry->IsLayerRegistered(Layer);
+}
 
 void UCrowdySDKSubsystem::SendMessage(const ICrowdyMessage& Message) const
 {
