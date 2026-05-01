@@ -2,8 +2,12 @@
 
 
 #include "FuntionLibraries/NetworkOperations.h"
+
+#include "Core/Enums/ESampleAnimState.h"
+#include "Core/Enums/ESampleGameEvents.h"
 #include "Core/Structs/Game/FSampleActorState.h"
 #include "Messages/Actor/FActorUpdateRequestMessage.h"
+#include "Messages/GameObjects/FGameEventRequest.h"
 #include "Subsystem/CrowdySDKSubsystem.h"
 
 
@@ -42,4 +46,37 @@ void UNetworkOperations::EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK
 	// Enqueue Message for send
 	CrowdySDK->SendMessage(ActorUpdateRequestMessage);
 	
+}
+
+void UNetworkOperations::RequestAnimationStateChange(const UCrowdySDKSubsystem* CrowdySDK, const int64 ChunkX, const int64 ChunkY,
+	const int64 ChunkZ, const FString& UUID, const ESampleAnimState NewAnimState)
+{
+	ensure(IsValid(CrowdySDK));
+	
+	if (!IsValid(CrowdySDK))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UNetworkOperations][EnqueueActorUpdate]: CrowdySDK Reference is null."));
+		return;
+	}
+	
+	// Constructing Message
+	FGameEventRequest AnimationEventRequestMessage;
+	
+	// Setting metadata
+	AnimationEventRequestMessage.AppID = 2;
+	AnimationEventRequestMessage.ChunkX = ChunkX;
+	AnimationEventRequestMessage.ChunkY = ChunkY;
+	AnimationEventRequestMessage.ChunkZ = ChunkZ;
+	AnimationEventRequestMessage.DecayRate = ECrowdyDecayRate::No_Decay;
+	AnimationEventRequestMessage.ReplicationDistance = ECrowdyReplicationDistance::Eight_Chunks;
+	AnimationEventRequestMessage.UUID = UUID;
+	
+	// Setting Event Properties
+	AnimationEventRequestMessage.EventType = static_cast<uint16>(ESampleGameEvent::ChangeAnimation);
+	AnimationEventRequestMessage.StateSize = sizeof(ESampleAnimState);
+	AnimationEventRequestMessage.StateBytes.Add(static_cast<uint8>(NewAnimState));
+	
+	
+	// Enqueue Message for send
+	CrowdySDK->SendMessage(AnimationEventRequestMessage);
 }

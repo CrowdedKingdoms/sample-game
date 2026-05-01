@@ -6,6 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "NetworkOperations.generated.h"
 
+enum class ESampleAnimState : uint8;
 struct FSampleActorState;
 class UCrowdySDKSubsystem;
 /**
@@ -21,7 +22,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK Sample|Network Operations")
 	static void EnqueueActorUpdate(const UCrowdySDKSubsystem* CrowdySDK, int64 ChunkX, int64 ChunkY, int64 ChunkZ, const FString& UUID, const FSampleActorState& ActorState);
 	
-	// TODO: Implement Various Game Events for showcase
-	//static void EnqueueGameEvent();
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK Sample|Network Operations")
+	static void RequestAnimationStateChange(const UCrowdySDKSubsystem* CrowdySDK, int64 ChunkX, int64 ChunkY, int64 ChunkZ, const FString& UUID, const ESampleAnimState NewAnimState);
 	
 };

@@ -27,7 +27,6 @@ struct FSampleActorState
 	
 	static bool Deserialize(const TArray<uint8>& Bytes, FSampleActorState& ActorUpdate)
 	{
-		FSampleActorState Result;
 		
 		if (Bytes.Num() != GetStateSize())
 		{
@@ -37,10 +36,10 @@ struct FSampleActorState
 		
 		int32 Offset = 0;
 		
-		FMemory::Memcpy(&Result.Location, Bytes.GetData(), sizeof(FVector));
+		FMemory::Memcpy(&ActorUpdate.Location, Bytes.GetData(), sizeof(FVector));
 		Offset += sizeof(FVector);
 		
-		FMemory::Memcpy(&Result.Rotation, Bytes.GetData() + Offset, sizeof(FRotator));
+		FMemory::Memcpy(&ActorUpdate.Rotation, Bytes.GetData() + Offset, sizeof(FRotator));
 		
 		return true;
 	}

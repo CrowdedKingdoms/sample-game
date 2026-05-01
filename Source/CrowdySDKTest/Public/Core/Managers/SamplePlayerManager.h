@@ -8,6 +8,8 @@
 #include "Core/Structs/Game/FSampleActorUpdate.h"
 #include "SamplePlayerManager.generated.h"
 
+struct FGameEventNotification;
+class ASamplePawnManager;
 class UCrowdyWorkerThreadsSubsystem;
 class UCrowdyGameSession;
 class UCrowdySDKSubsystem;
@@ -52,6 +54,9 @@ private:
 	UPROPERTY()
 	UCrowdyWorkerThreadsSubsystem* WorkerThreadsSubsystem;
 	
+	UPROPERTY(EditAnywhere, Category="Sample Player Manager|Config")
+	ASamplePawnManager* PawnManager;
+	
 	// Whether to process owner updates or not
 	UPROPERTY(EditAnywhere, Category="Sample Player Manager|Config")
 	bool bEnableOwnerGhost;
@@ -63,7 +68,7 @@ private:
 	// We use multi producer single consumer queues for this, since our message processing is async 
 	// and uses multiple threads so this is safe
 	// Each worker gets its own queue, this maximizes parallelism and efficiency.
-	// This scales well with more core counts
+	// This scales well with more core count
 	// Although it is not necessary to follow this pattern, as each implementation can vary
 	TArray<TUniquePtr<TQueue<FSampleActorUpdate, EQueueMode::Mpsc>>> UpdateQueues;
 	
@@ -90,6 +95,7 @@ private:
 	
 	void SetupUpdateQueues();
 	void HandleActorUpdateMessage(const FSampleActorUpdate& Update);
+	void HandleGameEvent(const FGameEventNotification& GameEventNotification) const;
 	void ProcessUpdateQueue(int32 WorkerIndex);
 	void ProcessTimedOutActors(const TArray<FGuid>& TimedOutActors);
 	
