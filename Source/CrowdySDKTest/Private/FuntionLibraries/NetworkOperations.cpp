@@ -80,3 +80,40 @@ void UNetworkOperations::RequestAnimationStateChange(const UCrowdySDKSubsystem* 
 	// Enqueue Message for send
 	CrowdySDK->SendMessage(AnimationEventRequestMessage);
 }
+
+void UNetworkOperations::DispatchObjectOperation(const UCrowdySDKSubsystem* CrowdySDK, const int64 ChunkX,
+	const int64 ChunkY, const int64 ChunkZ, const FString& InstigatorUUID,
+	const FSampleObjectOperationEvent ObjectOperationEvent)
+{
+	ensure(IsValid(CrowdySDK));
+	
+	if (!IsValid(CrowdySDK))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UNetworkOperations][EnqueueActorUpdate]: CrowdySDK Reference is null."));
+		return;
+	}
+	
+	// Constructing Message
+	FGameEventRequest ObjectOperation;
+	
+	// Setting metadata
+	ObjectOperation.AppID = 2;
+	ObjectOperation.ChunkX = ChunkX;
+	ObjectOperation.ChunkY = ChunkY;
+	ObjectOperation.ChunkZ = ChunkZ;
+	ObjectOperation.DecayRate = ECrowdyDecayRate::No_Decay;
+	ObjectOperation.ReplicationDistance = ECrowdyReplicationDistance::Eight_Chunks;
+	ObjectOperation.UUID = InstigatorUUID;
+	
+	// Assigning Event Type
+	ObjectOperation.EventType = static_cast<uint16>(ESampleGameEvent::ObjectOperation);
+	
+	// Getting State size
+	ObjectOperation.StateSize = FSampleObjectOperationEvent::GetSizeByType(ObjectOperationEvent.OperationType);
+	
+	// Appending State
+	ObjectOperation.StateBytes = FSampleObjectOperationEvent::Serialize(ObjectOperationEvent);
+	
+	// Dispatching Message
+	CrowdySDK->SendMessage(ObjectOperation);
+}

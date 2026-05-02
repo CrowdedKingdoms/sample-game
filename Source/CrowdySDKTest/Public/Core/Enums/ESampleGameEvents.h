@@ -2,5 +2,6 @@
 
 enum class ESampleGameEvent: uint16
 {
-	ChangeAnimation
+	ChangeAnimation,
+	ObjectOperation
 };

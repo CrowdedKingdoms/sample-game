@@ -2,7 +2,7 @@
 #include "FSampleActorState.h"
 
 // We are going to store a maximum of 4 snapshots per actor to interpolate between
-constexpr int32 SnapshotBufferSize = 4;
+constexpr int32 SnapshotBufferSize = 10;
 
 // Simple Update Struct
 struct FSampleActorUpdate
