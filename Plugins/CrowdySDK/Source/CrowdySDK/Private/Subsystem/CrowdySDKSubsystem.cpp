@@ -9,6 +9,7 @@
 #include "Core/GraphQL/Interfaces/ICrowdyQueryResponse.h"
 #include "Core/GraphQL/Interfaces/ICrowdyQueryTransmissionLayer.h"
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
+#include "Data/EventPayloadType.h"
 #include "Internal/FCrowdyServiceRegistry.h"
 #include "Internal/FCrowdyDataRegistry.h"
 #include "Messages/FPingTestMessage.h"
@@ -30,6 +31,8 @@
 #include "Queries/Permissions/FTeleportResponse.h"
 #include "Queries/UDP/FUDPAddressNotify.h"
 #include "Queries/UDP/FUDPAddressRequest.h"
+#include "Utils/CrowdySDKDeveloperSettings.h"
+#include "Utils/FEventPayloadRegistry.h"
 
 void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -44,7 +47,7 @@ void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// Pure allocations (no world required)
 	ServiceRegistry = new FCrowdyServiceRegistry();
 	DataRegistry    = new FCrowdyDataRegistry();
-	Parser          = new FCrowdyMessageParser(ServiceRegistry, UdpSubsystem);
+	Parser          = new FCrowdyMessageParser(ServiceRegistry, UdpSubsystem, this, GameSession);
 	BufferPool      = new FMessageBufferPool();
 
 	const UWorld* World = GetWorld();
@@ -88,6 +91,23 @@ void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	UdpSubsystem->OnUDPConnectionSuccessful.AddDynamic(this, &UCrowdySDKSubsystem::OnUDPConnectionSuccessful);
 	UdpSubsystem->OnUDPTimeout.AddDynamic(this, &UCrowdySDKSubsystem::OnUDPTimeout);
 
+	const UCrowdySDKDeveloperSettings* Settings = GetDefault<UCrowdySDKDeveloperSettings>();
+	
+	if (!IsValid(Settings) || Settings->EventPayloadDataAsset.IsNull())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: PayloadTypeDataAsset not set in Project Settings -> Crowdy SDK."));
+		return;
+	}
+	
+	if (const UEventPayloadType* DataAsset = Settings->EventPayloadDataAsset.LoadSynchronous())
+	{
+		FEventPayloadRegistry::Get().LoadFromDataAsset(DataAsset);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Event Payload Data Asset is null or invalid."));
+	}
+	
 	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] CrowdySDK Subsystem Initialized (PostWorldInit)"));
 }
 
@@ -97,6 +117,7 @@ void UCrowdySDKSubsystem::Deinitialize()
 	ServiceRegistry = nullptr;
 	Parser = nullptr;
 	TransmissionLayer = nullptr;
+	FEventPayloadRegistry::Get().Reset();
 	Super::Deinitialize();
 }
 
@@ -265,7 +286,20 @@ void UCrowdySDKSubsystem::SetExpectedActorUpdateStateSize(const int32 InSize) co
 {
 	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] Expected Actor Update State Size: %d"), InSize);
 	Parser->SetExpectedActorStateSize(InSize);
-}	
+}
+
+void UCrowdySDKSubsystem::OverrideEventDataAsset(const UEventPayloadType* DataAsset)
+{
+	if (!DataAsset)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: PayloadTypeDataAsset is null or invalid."));
+		return;
+	}
+	
+	FEventPayloadRegistry::Get().Reset();
+	FEventPayloadRegistry::Get().LoadFromDataAsset(DataAsset);
+	
+}
 
 void UCrowdySDKSubsystem::HandleLogin(const FLoginResponse& LoginResponse) const
 {

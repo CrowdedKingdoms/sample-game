@@ -2,6 +2,8 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+#include "Utils/FEventPayloadRegistry.h"
+
 FString USerializationFunctionLibrary::DeserializeString(const TArray<uint8>& Payload, int32 Offset, int32 Length)
 {
 	if (Offset + Length > Payload.Num())
@@ -224,3 +226,92 @@ FString USerializationFunctionLibrary::GenerateVoxelID(int64 ChunkX, int64 Chunk
 
 	return Result;
 }
+
+bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes)
+{
+	const UScriptStruct* StructType = Payload.GetScriptStruct();
+	const void* StructMemory = Payload.GetMemory();
+	
+	if (!StructType || !StructMemory)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[SerializePayload]: Invalid script struct or memory pointer"));
+		return false;
+	}
+	
+	int32 TypeID;
+	
+	if (!FEventPayloadRegistry::Get().GetID(StructType, TypeID))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[SerializePayload]: Failed to get ID for script struct"));
+		return false;
+	}
+	
+	OutBytes.Reset();
+	FMemoryWriter Writer(OutBytes, true);
+	
+	Writer << TypeID;
+	
+	StructType->SerializeBin(Writer, const_cast<void*>(StructMemory));
+	
+	UE_LOG(LogTemp, Log, TEXT("[SerializePayload] '%s' -> TypeID=%d, Size=%d bytes"),
+		*StructType->GetName(), TypeID, OutBytes.Num());
+	
+	return true;
+	
+}
+
+bool USerializationFunctionLibrary::DeserializeEventState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload)
+{
+	if (Payload.Num() < sizeof(int32))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DeserializePayload]: Payload too small"));
+		return false;
+	}
+	
+	FMemoryReader Reader(Payload, true);
+	
+	int32 TypeID;
+	Reader << TypeID;
+
+	const UScriptStruct* StructType = FEventPayloadRegistry::Get().Resolve(TypeID);
+	
+	if (!StructType)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DeserializePayload]: Failed to resolve script struct for TypeID=%d"), TypeID);
+		return false;
+	}
+	
+	OutPayload.InitializeAs(StructType);
+	StructType->SerializeBin(Reader, OutPayload.GetMutableMemory());
+	
+	UE_LOG(LogTemp, Log, TEXT("[DeserializePayload] TypeID=%d -> '%s'"), TypeID, *StructType->GetName());
+
+	return true;
+}
+
+#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
+void USerializationFunctionLibrary::LogStructContent(const FInstancedStruct& Payload)
+{
+	const UScriptStruct* StructType = Payload.GetScriptStruct();
+	const void* StructMemory = Payload.GetMemory();
+
+	if (!StructType || !StructMemory)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[LogStructContents] Empty or invalid FInstancedStruct."));
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[LogStructContents] Struct: %s"), *StructType->GetName());
+
+	for (TFieldIterator<FProperty> It(StructType); It; ++It)
+	{
+		FProperty* Prop = *It;
+		const void* PropMemory = Prop->ContainerPtrToValuePtr<void>(StructMemory);
+
+		FString ValueStr;
+		Prop->ExportTextItem_Direct(ValueStr, PropMemory, nullptr, nullptr, PPF_None);
+
+		UE_LOG(LogTemp, Log, TEXT("  %s = %s"), *Prop->GetName(), *ValueStr);
+	}
+}
+#endif

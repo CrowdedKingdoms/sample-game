@@ -131,9 +131,6 @@ void ASamplePlayerManager::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 			// We must trigger a UDP Heartbeat, that ensures our connection is alive.
 			if (ActorUpdateNotificationMessage.UUID == CrowdyGameSession->GetUUID())
 			{
-				// Trigger the UDP Heartbeat
-				CrowdySDK->TriggerUdpHeartbeat();
-
 				// If Owner Updates are disabled, we return early and don't enqueue owner updates for processing
 				if (!bEnableOwnerGhost)
 					return;

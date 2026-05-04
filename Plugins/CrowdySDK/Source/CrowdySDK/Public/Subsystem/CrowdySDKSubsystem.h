@@ -43,6 +43,7 @@ class UCrowdyQuerySubsystem;
 class UCrowdyGameSession;
 class UCrowdyUDPSubsystem;
 class UVoiceChatSubsystem;
+class UEventPayloadType;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLogin, bool, bSuccess, FString, GameToken);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRegister, bool, bSuccess, FString, Message);
@@ -158,6 +159,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Subsystem")
 	void SetExpectedActorUpdateStateSize(const int32 InSize) const;
 	
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Config")
+	void OverrideEventDataAsset(const UEventPayloadType* DataAsset);
+	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const;
 	void RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer* LayerToRegister) const;
 	bool IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const;
@@ -192,6 +196,9 @@ private:
 	
 	UPROPERTY()
 	UVoiceChatSubsystem* VoiceChatSubsystem;
+	
+	UPROPERTY(EditAnywhere, Category = "CrowdySDK|Config")
+	TSoftObjectPtr<UEventPayloadType> EventPayloadData;
 	
 	// Internal Service References
 	FVoiceChatService* VoiceChatService;

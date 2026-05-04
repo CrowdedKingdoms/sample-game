@@ -5,6 +5,7 @@
 
 #include "Core/Enums/ESampleAnimState.h"
 #include "Core/Enums/ESampleGameEvents.h"
+#include "Core/Structs/Events/FSampleGameEventStateBase.h"
 #include "Core/Structs/Game/FSampleActorState.h"
 #include "Messages/Actor/FActorUpdateRequestMessage.h"
 #include "Messages/GameObjects/FGameEventRequest.h"
@@ -82,8 +83,7 @@ void UNetworkOperations::RequestAnimationStateChange(const UCrowdySDKSubsystem* 
 }
 
 void UNetworkOperations::DispatchObjectOperation(const UCrowdySDKSubsystem* CrowdySDK, const int64 ChunkX,
-	const int64 ChunkY, const int64 ChunkZ, const FString& InstigatorUUID,
-	const FSampleObjectOperationEvent ObjectOperationEvent)
+                                                 const int64 ChunkY, const int64 ChunkZ, const FString& InstigatorUUID, FInstancedStruct Payload)
 {
 	ensure(IsValid(CrowdySDK));
 	
@@ -104,16 +104,35 @@ void UNetworkOperations::DispatchObjectOperation(const UCrowdySDKSubsystem* Crow
 	ObjectOperation.DecayRate = ECrowdyDecayRate::No_Decay;
 	ObjectOperation.ReplicationDistance = ECrowdyReplicationDistance::Eight_Chunks;
 	ObjectOperation.UUID = InstigatorUUID;
-	
-	// Assigning Event Type
 	ObjectOperation.EventType = static_cast<uint16>(ESampleGameEvent::ObjectOperation);
 	
-	// Getting State size
-	ObjectOperation.StateSize = FSampleObjectOperationEvent::GetSizeByType(ObjectOperationEvent.OperationType);
+	// =====================================================
+	// SERIALIZE PAYLOAD (SAFE VERSION)
+	// =====================================================
+
 	
-	// Appending State
-	ObjectOperation.StateBytes = FSampleObjectOperationEvent::Serialize(ObjectOperationEvent);
+	if (!USerializationFunctionLibrary::SerializeEventState(Payload, ObjectOperation.StateBytes))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UNetworkOperations][DispatchObjectOperation]: Failed to serialize payload."));
+		return;
+	}
 	
-	// Dispatching Message
-	CrowdySDK->SendMessage(ObjectOperation);
+	ObjectOperation.StateSize = ObjectOperation.StateBytes.Num();
+	UE_LOG(LogTemp, Log, TEXT("Payload Size: %d"), ObjectOperation.StateBytes.Num());
+	
+	FInstancedStruct OutPayload;
+	if (!USerializationFunctionLibrary::DeserializeEventState(ObjectOperation.StateBytes, OutPayload))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UNetworkOperations][DispatchObjectOperation]: Failed to deserialize payload."));
+		return;
+	}
+	
+#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
+	USerializationFunctionLibrary::LogStructContent(OutPayload);
+#endif
+	
+	// =====================================================
+	// SEND
+	// =====================================================
+	// CrowdySDK->SendMessage(ObjectOperation);
 }

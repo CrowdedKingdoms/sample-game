@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <cstring>
 #include "Dom/JsonObject.h"
+#include "StructUtils/InstancedStruct.h"
 
 #define UI UI_ST
 THIRD_PARTY_INCLUDES_START
@@ -155,6 +156,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Serialization Function Library")
 	static FString GenerateVoxelID(int64 ChunkX, int64 ChunkY, int64 ChunkZ, int32 VoxelX, int32 VoxelY, int32 VoxelZ);
+	
+	static bool SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes);
+	static bool DeserializeEventState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload);
+	
+#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
+	static void LogStructContent(const FInstancedStruct& Payload);
+#endif
 };
 
 template <typename T>

@@ -42,7 +42,8 @@ public class CrowdySDK : ModuleRules
 				"ProceduralMeshComponent",
 				"UMG",
 				"GameplayTags",
-				"Projects"
+				"Projects",
+				"DeveloperSettings"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

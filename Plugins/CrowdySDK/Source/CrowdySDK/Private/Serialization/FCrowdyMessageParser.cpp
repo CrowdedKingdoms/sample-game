@@ -11,12 +11,16 @@
 #include "Messages/Voxel/FVoxelUpdateNotificationMessage.h"
 #include "Messages/Voxel/FVoxelUpdateResponseMessage.h"
 #include "Network/UDP/CrowdyUDPSubsystem.h"
+#include "Subsystem/CrowdyGameSession.h"
+#include "Subsystem/CrowdySDKSubsystem.h"
 
 FCrowdyMessageParser::FCrowdyMessageParser(FCrowdyServiceRegistry* InServiceRegistry,
-                                           UCrowdyUDPSubsystem* InUDPSubsystem)
+                                           UCrowdyUDPSubsystem* InUDPSubsystem, UCrowdySDKSubsystem* InSDK, UCrowdyGameSession* InGameSession)
 {
 	ServiceRegistry = InServiceRegistry;
 	UDPSubsystem = InUDPSubsystem;
+	SDK = InSDK;
+	GameSession = InGameSession;
 }
 
 TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe> FCrowdyMessageParser::ParseMessage(const TArray<uint8>& Data)
@@ -83,6 +87,10 @@ TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe> FCrowdyMessageParser::ParseMessa
 			{
 				return MakeShared<FDefaultMessage>();
 			}
+			
+			if (Message->UUID == GameSession->GetUUID())
+				SDK->TriggerUdpHeartbeat();
+			
 			return Message;
 		}
 	case ECrowdyMessageType::ACTOR_UPDATE_RESPONSE:

@@ -2,9 +2,6 @@
 
 
 #include "Core/Managers/SampleObjectManager.h"
-
-#include "Core/Enums/ESampleGameEvents.h"
-#include "Core/Structs/Game/FSampleObjectOperationEvent.h"
 #include "Messages/GameObjects/FGameEventNotification.h"
 #include "Subsystem/CrowdySDKSubsystem.h"
 
@@ -21,46 +18,6 @@ void ASampleObjectManager::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 	switch(Message->GetType())
 	{
 	case ECrowdyMessageType::CLIENT_EVENT_NOTIFICATION:
-		{
-			const auto& ClientEventNotificationMessage = static_cast<const FGameEventNotification&>(*Message);
-			
-			ESampleGameEvent EventType = static_cast<ESampleGameEvent>(ClientEventNotificationMessage.EventType);
-			
-			// TODO: Cleanup later
-			switch (EventType)
-			{
-				case ESampleGameEvent::ObjectOperation:
-					{
-						FSampleObjectOperationEvent ObjectOperationEvent;
-						
-						if (!FSampleObjectOperationEvent::Deserialize(ClientEventNotificationMessage.StateBytes, ObjectOperationEvent))
-						{
-							UE_LOG(LogTemp, Warning, TEXT("[ASampleObjectManager][OnMessageReceived]: Failed to deserialize Object Operation Event"));
-						}
-						
-						AsyncTask(ENamedThreads::GameThread, [this, ObjectOperationEvent]()
-						{
-							const FVector SpawnLoc = ObjectOperationEvent.Location;
-							FRotator SpawnRot = ObjectOperationEvent.Rotation;
-							const FActorSpawnParameters SpawnParams;
-							AActor* Actor = GetWorld()->SpawnActor<AActor>(
-								ActorClassToSpawn,
-								SpawnLoc,
-								FRotator::ZeroRotator,
-								SpawnParams
-								);
-						});
-						
-					}
-				break;
-				
-				default:
-				break;
-			}
-			
-		}
-		break;
-		
 		default:
 		break;
 	}
