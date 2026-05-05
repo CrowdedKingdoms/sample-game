@@ -10,7 +10,7 @@
 #include "CrowdySDKSubsystem.generated.h"
 
 
-
+struct FInstancedStruct;
 // Structs
 struct FUDPAddressNotify;
 struct FRegisterResponse;
@@ -161,6 +161,11 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Config")
 	void OverrideEventDataAsset(const UEventPayloadType* DataAsset);
+	
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Replication|Events")
+	void DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
+	                       const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
+	                       const FString& InstigatorUUID, FInstancedStruct EventPayload, bool bAsync = false) const;
 	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const;
 	void RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer* LayerToRegister) const;

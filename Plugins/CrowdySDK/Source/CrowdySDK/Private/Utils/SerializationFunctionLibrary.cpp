@@ -2,7 +2,7 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
-#include "Utils/FEventPayloadRegistry.h"
+#include "Utils/UEventPayloadRegistry.h"
 
 FString USerializationFunctionLibrary::DeserializeString(const TArray<uint8>& Payload, int32 Offset, int32 Length)
 {
@@ -240,7 +240,7 @@ bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& 
 	
 	int32 TypeID;
 	
-	if (!FEventPayloadRegistry::Get().GetID(StructType, TypeID))
+	if (!UEventPayloadRegistry::Get()->GetID(StructType, TypeID))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[SerializePayload]: Failed to get ID for script struct"));
 		return false;
@@ -273,7 +273,7 @@ bool USerializationFunctionLibrary::DeserializeEventState(const TArray<uint8>& P
 	int32 TypeID;
 	Reader << TypeID;
 
-	const UScriptStruct* StructType = FEventPayloadRegistry::Get().Resolve(TypeID);
+	const UScriptStruct* StructType = UEventPayloadRegistry::Get()->Resolve(TypeID);
 	
 	if (!StructType)
 	{

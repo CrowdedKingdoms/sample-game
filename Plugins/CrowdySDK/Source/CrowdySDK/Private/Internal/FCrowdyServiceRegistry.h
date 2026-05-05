@@ -30,6 +30,9 @@ public:
 	
 private:
 	
+	void DispatchToLayers(ECrowdyMessageType ResponseType, const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
+	void DispatchEventNotification(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
+	
 	/** Named Serviced **/
 	TMap<FName, ICrowdyService*> Services;
 	
@@ -39,4 +42,9 @@ private:
 	/** Map of message type to reception layers */
 	TMap<ECrowdyMessageType, TArray<ICrowdyReceptionLayer*>> ReceptionLayersByType;
 	
+	// Specific Game Events handled, not Message Types
+	TMap<FName, TArray<ICrowdyReceptionLayer*>> SubscribedEventLayers;
+	
+	TArray<ICrowdyReceptionLayer*> UnfilteredEventLayers;
+
 };

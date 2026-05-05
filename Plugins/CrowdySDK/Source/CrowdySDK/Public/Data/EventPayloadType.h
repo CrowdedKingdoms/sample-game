@@ -12,8 +12,11 @@ struct FEventPayloadTypeEntry
 {
 	GENERATED_BODY()
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CrowdySDK|Event Payload Type", meta=(ClampMin=0, DisplayName="ID"))
-	int32 TypeID = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CrowdySDK|Event Payload Type", meta=(ClampMin=50, ClampMax=65535, DisplayName="ID"))
+	int32 TypeID = 50;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CrowdySDK|Event Payload Type")
+	FName EventName;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="CrowdySDK|Event Payload Type")
 	TObjectPtr<UScriptStruct> EventType = nullptr;

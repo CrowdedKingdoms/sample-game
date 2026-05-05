@@ -54,4 +54,11 @@ public:
 	 * @return true if the message type is handled, false otherwise.
 	 */
 	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const = 0;
+	
+	// New function to allow selected dispatch of events
+	virtual TArray<FName> GetSupportedEventTypes() const
+	{
+		return {};
+	}
+	
 };

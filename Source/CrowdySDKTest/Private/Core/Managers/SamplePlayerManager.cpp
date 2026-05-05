@@ -2,9 +2,8 @@
 
 
 #include "Core/Managers/SamplePlayerManager.h"
-
-#include "Core/Enums/ESampleGameEvents.h"
 #include "Core/Managers/SamplePawnManager.h"
+#include "Core/Structs/Events/FChangeAnimState.h"
 #include "Core/Structs/Game/FSampleActorState.h"
 #include "Core/Structs/Game/FSampleActorUpdate.h"
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
@@ -164,7 +163,6 @@ void ASamplePlayerManager::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 
 	// Added a default case in case some other message leaks here
 	default:
-		UE_LOG(LogTemp, Error, TEXT("Unknown message type. %s"), *Message->GetTypeName().ToString());
 		break;
 	}
 }
@@ -185,6 +183,11 @@ TArray<ECrowdyMessageType> ASamplePlayerManager::GetSupportedResponseTypes() con
 		ECrowdyMessageType::ACTOR_UPDATE_RESPONSE,
 		ECrowdyMessageType::CLIENT_EVENT_NOTIFICATION
 	};
+}
+
+TArray<FName> ASamplePlayerManager::GetSupportedEventTypes() const
+{
+	return TArray{FName("ChangeAnimState")};
 }
 
 void ASamplePlayerManager::SetOwnerGhostEnabled(const bool bEnable)
@@ -221,29 +224,33 @@ void ASamplePlayerManager::HandleActorUpdateMessage(const FSampleActorUpdate& Up
 
 void ASamplePlayerManager::HandleGameEvent(const FGameEventNotification& GameEventNotification) const
 {
-	// We do a simple type cast and check if the event is of our defined type -- see ESampleGameEvents.h
-	const ESampleGameEvent EventType = static_cast<ESampleGameEvent>(GameEventNotification.EventType);
-
-	switch (EventType)
+	FInstancedStruct EventState;
+	
+	if (!USerializationFunctionLibrary::DeserializeEventState(GameEventNotification.StateBytes, EventState))
 	{
-	case ESampleGameEvent::ChangeAnimation:
+		UE_LOG(LogTemp, Warning, TEXT("[SamplePlayerManager][HandleGameEvent]: Failed to deserialize event state."));
+		return;
+	}
+	
+	const UScriptStruct* StructType = EventState.GetScriptStruct();
+	
+	if (!StructType)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SamplePlayerManager][HandleGameEvent]: Invalid script struct."));
+		return;
+	}
+	
+	if (StructType == FChangeAnimState::StaticStruct())
+	{
+		FChangeAnimState Data = EventState.Get<FChangeAnimState>();
+		
+		FGuid UUID = Data.TargetID;
+		ESampleAnimState AnimState = Data.NewState;
+		
+		AsyncTask(ENamedThreads::GameThread, [this, UUID, AnimState]()
 		{
-			// We first take the UUID of the instigator, the convention is to use it as the target UUID
-			const FGuid TargetUUID = USerializationFunctionLibrary::ToGuid(GameEventNotification.UUID);
-			
-			// We take the first byte of the payload, since that represents the anim state and cast it to our Enum
-			const ESampleAnimState NewAnimState = static_cast<ESampleAnimState>(GameEventNotification.StateBytes[0]);
-			
-			// We launch the task to the game thread, since Change Animation Operation is not thread-safe
-			UE::Tasks::Launch(UE_SOURCE_LOCATION, [this, TargetUUID, NewAnimState]
-			{
-				PawnManager->ChangeAnimation(TargetUUID, NewAnimState);
-			}, LowLevelTasks::ETaskPriority::BackgroundNormal, UE::Tasks::EExtendedTaskPriority::GameThreadNormalPri);
-
-			break;
-		}
-	default:
-		UE_LOG(LogTemp, Error, TEXT("Unknown Event Type received %d"), EventType);
+			PawnManager->ChangeAnimation(UUID, AnimState);
+		});
 	}
 }
 

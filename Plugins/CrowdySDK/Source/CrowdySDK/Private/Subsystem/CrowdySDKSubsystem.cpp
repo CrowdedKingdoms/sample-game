@@ -13,6 +13,7 @@
 #include "Internal/FCrowdyServiceRegistry.h"
 #include "Internal/FCrowdyDataRegistry.h"
 #include "Messages/FPingTestMessage.h"
+#include "Messages/GameObjects/FGameEventRequest.h"
 #include "Network/GraphQL/CrowdyQuerySubsystem.h"
 #include "Network/UDP/FCrowdyTransmissionLayerUDP.h"
 #include "Serialization/FCrowdyMessageParser.h"
@@ -32,7 +33,7 @@
 #include "Queries/UDP/FUDPAddressNotify.h"
 #include "Queries/UDP/FUDPAddressRequest.h"
 #include "Utils/CrowdySDKDeveloperSettings.h"
-#include "Utils/FEventPayloadRegistry.h"
+#include "Utils/UEventPayloadRegistry.h"
 
 void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -101,7 +102,7 @@ void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	
 	if (const UEventPayloadType* DataAsset = Settings->EventPayloadDataAsset.LoadSynchronous())
 	{
-		FEventPayloadRegistry::Get().LoadFromDataAsset(DataAsset);
+		UEventPayloadRegistry::Get()->LoadFromDataAsset(DataAsset);
 	}
 	else
 	{
@@ -117,7 +118,8 @@ void UCrowdySDKSubsystem::Deinitialize()
 	ServiceRegistry = nullptr;
 	Parser = nullptr;
 	TransmissionLayer = nullptr;
-	FEventPayloadRegistry::Get().Reset();
+	UEventPayloadRegistry::Get()->Reset();
+	UEventPayloadRegistry::Get()->Shutdown();
 	Super::Deinitialize();
 }
 
@@ -296,9 +298,62 @@ void UCrowdySDKSubsystem::OverrideEventDataAsset(const UEventPayloadType* DataAs
 		return;
 	}
 	
-	FEventPayloadRegistry::Get().Reset();
-	FEventPayloadRegistry::Get().LoadFromDataAsset(DataAsset);
+	UEventPayloadRegistry::Get()->Reset();
+	UEventPayloadRegistry::Get()->LoadFromDataAsset(DataAsset);
 	
+}
+
+void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
+                                            const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
+                                            const FString& InstigatorUUID, FInstancedStruct EventPayload, const bool bAsync) const
+{
+	
+	auto BuildAndSend = [this,
+	ChunkX, ChunkY, ChunkZ,
+	DecayRate, ReplicationDistance,
+	InstigatorUUID,
+	
+	Payload = MoveTemp(EventPayload)]() mutable
+	{
+		FGameEventRequest EventRequest;
+
+		EventRequest.AppID = 2;
+		EventRequest.ChunkX = ChunkX;
+		EventRequest.ChunkY = ChunkY;
+		EventRequest.ChunkZ = ChunkZ;
+		EventRequest.DecayRate = DecayRate;
+		EventRequest.ReplicationDistance = ReplicationDistance;
+		EventRequest.UUID = InstigatorUUID;
+
+		int32 EventID;
+
+		if (!UEventPayloadRegistry::Get()->GetID(Payload.GetScriptStruct(), EventID))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Event Payload not registered."));
+			return;
+		}
+
+		EventRequest.EventType = static_cast<uint16>(EventID);
+
+		if (!USerializationFunctionLibrary::SerializeEventState(Payload, EventRequest.StateBytes))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Failed to serialize event payload."));
+			return;
+		}
+
+		EventRequest.StateSize = EventRequest.StateBytes.Num();
+
+		SendMessage(EventRequest);
+	};
+	
+	if (bAsync)
+	{
+		UE::Tasks::Launch(UE_SOURCE_LOCATION, MoveTemp(BuildAndSend), LowLevelTasks::ETaskPriority::BackgroundNormal);
+	}
+	else
+	{
+		BuildAndSend();
+	}
 }
 
 void UCrowdySDKSubsystem::HandleLogin(const FLoginResponse& LoginResponse) const

@@ -265,7 +265,7 @@ void FVoiceChatService::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 {
 	if (Message->GetType() != ECrowdyMessageType::CLIENT_AUDIO_NOTIFICATION)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Received unexpected message type: %s"), *Message->GetTypeName().ToString());
+		//UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Received unexpected message type: %s"), *Message->GetTypeName().ToString());
 		return;
 	}
 

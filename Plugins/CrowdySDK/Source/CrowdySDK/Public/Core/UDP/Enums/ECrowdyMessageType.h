@@ -158,27 +158,28 @@ enum class ECrowdyPermissions : uint8
     CannotUseWeapon = 19
 };
 
-UENUM()
+UENUM(BlueprintType, meta=(DisplayName="Decay Rate"))
 enum class ECrowdyDecayRate : uint8
 {
-    No_Decay = 0,
-    Exponential_Decay = 1,
-    Linear_50 = 2,
-    Linear_25 = 3,
-    Linear_10 = 4,
-    Linear_5 = 5,
+    No_Decay = 0 UMETA(DisplayName = "No Decay"),
+    Exponential_Decay = 1 UMETA(DisplayName="Exponential Decay"),
+    Linear_100 = 2 UMETA(DisplayName = "Linear 100 Decay"),
+    Linear_50 = 2 UMETA(DisplayName = "Linear 50 Decay"),
+    Linear_25 = 3 UMETA(DisplayName= "Linear 25 Decay"),
+    Linear_10 = 4 UMETA(DisplayName= "Linear 10 Decay"),
+    Linear_5 = 5 UMETA(DisplayName= "Linear 5 Decay"),
 };
 
-UENUM()
+UENUM(BlueprintType, meta=(DisplayName="Replication Distance"))
 enum class ECrowdyReplicationDistance : uint8
 {
-    None = 0,
-    One_Chunk = 1,
-    Two_Chunks = 2,
-    Three_Chunks = 3,
-    Four_Chunks = 4,
-    Five_Chunks = 5,
-    Six_Chunks = 6,
-    Seven_Chunks = 7,
-    Eight_Chunks = 8,
+    None = 0 UMETA(DisplayName = "None"),
+    One_Chunk = 1 UMETA(DisplayName = "One Chunk"),
+    Two_Chunks = 2 UMETA(DisplayName = "Two Chunks"),
+    Three_Chunks = 3 UMETA(DisplayName = "Three Chunks"),
+    Four_Chunks = 4 UMETA(DisplayName = "Four Chunks"),
+    Five_Chunks = 5 UMETA(DisplayName = "Five Chunks"),
+    Six_Chunks = 6 UMETA(DisplayName = "Six Chunks"),
+    Seven_Chunks = 7 UMETA(DisplayName = "Seven Chunks"),
+    Eight_Chunks = 8 UMETA(DisplayName = "Eight Chunks"),
 };

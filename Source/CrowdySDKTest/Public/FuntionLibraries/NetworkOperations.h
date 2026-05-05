@@ -26,16 +26,4 @@ public:
 		int64 ChunkX, int64 ChunkY, int64 ChunkZ, 
 		const FString& UUID, 
 		const FSampleActorState& ActorState);
-	
-	UFUNCTION(BlueprintCallable, Category="CrowdySDK Sample|Network Operations")
-	static void RequestAnimationStateChange(const UCrowdySDKSubsystem* CrowdySDK, 
-		int64 ChunkX, int64 ChunkY, int64 ChunkZ, 
-		const FString& UUID, 
-		const ESampleAnimState NewAnimState);
-	
-	// TODO: Move to SDK
-	UFUNCTION(BlueprintCallable, Category="CrowdySDK Sample|Network Operations")
-	static void DispatchObjectOperation(const UCrowdySDKSubsystem* CrowdySDK,
-	                                    const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
-	                                    const FString& InstigatorUUID, FInstancedStruct Payload);
 };

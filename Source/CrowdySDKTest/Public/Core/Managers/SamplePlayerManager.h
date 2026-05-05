@@ -30,7 +30,8 @@ public:
 	// Implement these to receive messages
 	virtual void OnMessageReceived(TSharedRef<ICrowdyMessage> Message) override;
 	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const override;
-
+	virtual TArray<FName> GetSupportedEventTypes() const override;
+	
 	// Called from within different blueprints to enable or disable owner reflection 
 	UFUNCTION(BlueprintCallable, Category="Sample Player Manager|Config")
 	void SetOwnerGhostEnabled(const bool bEnable);

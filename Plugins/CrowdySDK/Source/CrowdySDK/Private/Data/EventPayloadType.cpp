@@ -8,94 +8,147 @@
 
 void UEventPayloadType::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-	TMap<int32, int32> SeenIDs; // TypeID -> first index that used it
+    Super::PostEditChangeProperty(PropertyChangedEvent);
+    
+    constexpr int32 RegistryMin = 50;
+    
+    TMap<int32, int32> SeenIDs;
+    TSet<FName> SeenNames;
 
-	for (int32 i = 0; i < Entries.Num(); i++)
-	{
-		const int32 ID = Entries[i].TypeID;
+    for (int32 i = 0; i < Entries.Num(); i++)
+    {
+        // --- TypeID resolution ---
+        const int32 ID = Entries[i].TypeID;
 
-		if (ID <= 0)
-		{
-			// Auto-assign the next available ID instead of leaving 0
-			int32 Next = 1;
-			while (SeenIDs.Contains(Next)) Next++;
-			Entries[i].TypeID = Next;
-			SeenIDs.Add(Next, i);
-			continue;
-		}
+        if (ID < RegistryMin)
+        {
+            // Find next available ID >= RegistryMin
+            int32 Next = RegistryMin;
+            while (SeenIDs.Contains(Next)) Next++;
 
-		if (SeenIDs.Contains(ID))
-		{
-			// Duplicate found — auto-increment until unique
-			int32 Next = ID + 1;
-			while (SeenIDs.Contains(Next)) Next++;
+            UE_LOG(LogTemp, Warning,
+                TEXT("[UEventPayloadType]: TypeID %d at index %d is reserved for legacy events (< %d) — reassigned to %d."),
+                ID, i, RegistryMin, Next);
 
-			UE_LOG(LogTemp, Warning,
-				TEXT("[UEventPayloadType]: Duplicate TypeID %d at index %d — reassigned to %d."),
-				ID, i, Next);
+            Entries[i].TypeID = Next;
+            SeenIDs.Add(Next, i);
+        }
+        else if (SeenIDs.Contains(ID))
+        {
+            int32 Next = ID + 1;
+            while (SeenIDs.Contains(Next)) Next++;
 
-			Entries[i].TypeID = Next;
-			SeenIDs.Add(Next, i);
-		}
-		else
-		{
-			SeenIDs.Add(ID, i);
-		}
-	}
+            UE_LOG(LogTemp, Warning,
+                TEXT("[UEventPayloadType]: Duplicate TypeID %d at index %d — reassigned to %d."),
+                ID, i, Next);
+
+            Entries[i].TypeID = Next;
+            SeenIDs.Add(Next, i);
+        }
+        else
+        {
+            SeenIDs.Add(ID, i);
+        }
+
+        // --- EventName resolution ---
+        if (Entries[i].EventName.IsNone())
+        {
+            Entries[i].EventName = FName(*FString::Printf(TEXT("Event_%d"), Entries[i].TypeID));
+        }
+
+        if (SeenNames.Contains(Entries[i].EventName))
+        {
+            FName Unique = FName(*FString::Printf(TEXT("%s_%d"), *Entries[i].EventName.ToString(), i));
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[UEventPayloadType]: Duplicate EventName '%s' at index %d — reassigned to '%s'."),
+                *Entries[i].EventName.ToString(), i, *Unique.ToString());
+
+            Entries[i].EventName = Unique;
+        }
+
+        SeenNames.Add(Entries[i].EventName);
+    }
 }
 
 EDataValidationResult UEventPayloadType::IsDataValid(FDataValidationContext& Context) const
 {
-	EDataValidationResult Result =  Super::IsDataValid(Context);
-	
-	TMap<int32, int32> SeenIDs;
-	TSet<const UScriptStruct*> SeenStructs;
+    EDataValidationResult Result = Super::IsDataValid(Context);
 
-	for (int32 i = 0; i < Entries.Num(); i++)
-	{
-		const FEventPayloadTypeEntry& Entry = Entries[i];
+    constexpr int32 RegistryMin = 50;
 
-		if (Entry.TypeID <= 0)
-		{
-			Context.AddError(FText::FromString(
-				FString::Printf(TEXT("Entry[%d] has invalid TypeID %d — must be > 0."), i, Entry.TypeID)));
-			Result = EDataValidationResult::Invalid;
-		}
+    TMap<int32, int32> SeenIDs;
+    TSet<const UScriptStruct*> SeenStructs;
+    TMap<FName, int32> SeenNames;
 
-		if (!Entry.EventType)
-		{
-			Context.AddError(FText::FromString(
-				FString::Printf(TEXT("Entry[%d] has no StructType assigned."), i)));
-			Result = EDataValidationResult::Invalid;
-			continue;
-		}
+    for (int32 i = 0; i < Entries.Num(); i++)
+    {
+        const FEventPayloadTypeEntry& Entry = Entries[i];
 
-		if (SeenIDs.Contains(Entry.TypeID))
-		{
-			Context.AddError(FText::FromString(
-				FString::Printf(TEXT("Entry[%d] TypeID %d is already used by Entry[%d]."),
-					i, Entry.TypeID, SeenIDs[Entry.TypeID])));
-			Result = EDataValidationResult::Invalid;
-		}
-		else
-		{
-			SeenIDs.Add(Entry.TypeID, i);
-		}
+        // --- TypeID range ---
+        if (Entry.TypeID < RegistryMin)
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] TypeID %d is reserved for legacy events — must be >= %d."),
+                    i, Entry.TypeID, RegistryMin)));
+            Result = EDataValidationResult::Invalid;
+        }
 
-		if (SeenStructs.Contains(Entry.EventType))
-		{
-			Context.AddError(FText::FromString(
-				FString::Printf(TEXT("Entry[%d] EventType '%s' is already registered under a different ID."),
-					i, *Entry.EventType->GetName())));
-			Result = EDataValidationResult::Invalid;
-		}
-		else
-		{
-			SeenStructs.Add(Entry.EventType);
-		}
-	}
+        // --- EventType struct ---
+        if (!Entry.EventType)
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] has no StructType assigned."), i)));
+            Result = EDataValidationResult::Invalid;
+            continue;
+        }
 
-	return Result;
+        // --- Duplicate TypeID ---
+        if (SeenIDs.Contains(Entry.TypeID))
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] TypeID %d is already used by Entry[%d]."),
+                    i, Entry.TypeID, SeenIDs[Entry.TypeID])));
+            Result = EDataValidationResult::Invalid;
+        }
+        else
+        {
+            SeenIDs.Add(Entry.TypeID, i);
+        }
+
+        // --- Duplicate EventType struct ---
+        if (SeenStructs.Contains(Entry.EventType))
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] EventType '%s' is already registered under a different ID."),
+                    i, *Entry.EventType->GetName())));
+            Result = EDataValidationResult::Invalid;
+        }
+        else
+        {
+            SeenStructs.Add(Entry.EventType);
+        }
+
+        // --- EventName ---
+        if (Entry.EventName.IsNone())
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] has no EventName assigned."), i)));
+            Result = EDataValidationResult::Invalid;
+        }
+        else if (SeenNames.Contains(Entry.EventName))
+        {
+            Context.AddError(FText::FromString(
+                FString::Printf(TEXT("Entry[%d] EventName '%s' is already used by Entry[%d]."),
+                    i, *Entry.EventName.ToString(), SeenNames[Entry.EventName])));
+            Result = EDataValidationResult::Invalid;
+        }
+        else
+        {
+            SeenNames.Add(Entry.EventName, i);
+        }
+    }
+
+    return Result;
 }
 #endif
