@@ -27,7 +27,7 @@ void ASamplePlayerManager::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Get Reference to SDK, since it's a Game Instance Subsystem it's available system-wide
+	// Get Reference to SDK; since it's a Game Instance Subsystem, it's available system-wide
 	CrowdySDK = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdySDKSubsystem>();
 
 	// Get Reference to Crowdy Game Session
@@ -65,7 +65,7 @@ void ASamplePlayerManager::BeginPlay()
 		return;
 
 
-	// This informs parser in advance the size of State to expect. This can be set per map/game mode
+	// This informs the parser in advance the size of State to expect. This can be set per map/game mode
 	// In this case, we are expecting to receive FSampleActorUpdate so we just get it's size directly as that is 
 	// what we pass in the payload 
 	CrowdySDK->SetExpectedActorUpdateStateSize(sizeof(FSampleActorState));
@@ -115,19 +115,29 @@ void ASamplePlayerManager::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 	{
 	case ECrowdyMessageType::ACTOR_UPDATE_NOTIFICATION:
 		{
-			const auto& ActorUpdateNotificationMessage = static_cast<const FActorUpdateNotificationMessage&>(*Message);
-
-			FSampleActorState State;
-
-			if (!FSampleActorState::Deserialize(ActorUpdateNotificationMessage.StateBytes, State))
+			// Cast ICrowdyMessage to FActorUpdateNotificationMessage to pull data from it
+			const FActorUpdateNotificationMessage& ActorUpdateNotificationMessage = static_cast<const FActorUpdateNotificationMessage&>(*Message);
+			
+			// State at this point contains the struct you expect to receive
+			const UScriptStruct* StructType = ActorUpdateNotificationMessage.State.GetScriptStruct();
+			
+			// Return if it's invalid for some reason, it really shouldn't 
+			if (!StructType)
 			{
-				UE_LOG(LogTemp, Warning,
-				       TEXT("[SamplePlayerManager][OnMessageReceived]: Failed to deserialize update"));
+				UE_LOG(LogTemp, Warning, TEXT("[SamplePlayerManager][OnMessageReceived]: Invalid script struct."));
+				return;
+			}
+			
+			// Since we're handling FSampleActorState, we do a check on the type, return if anything else leaks here
+			if (StructType != FSampleActorState::StaticStruct())
+			{
 				return;
 			}
 
+			// Now we get the state from the FInstancedStruct
+			const FSampleActorState State = ActorUpdateNotificationMessage.State.Get<FSampleActorState>();
+
 			// We check to see if it's our own update
-			// We must trigger a UDP Heartbeat, that ensures our connection is alive.
 			if (ActorUpdateNotificationMessage.UUID == CrowdyGameSession->GetUUID())
 			{
 				// If Owner Updates are disabled, we return early and don't enqueue owner updates for processing
@@ -136,12 +146,12 @@ void ASamplePlayerManager::OnMessageReceived(TSharedRef<ICrowdyMessage> Message)
 			}
 
 			// We construct an update of this format, since timestamp, UUID are required for tracking in the replicated actor manager
-			// We only do bookkeeping and dispatching here in Player Manager
+			// We only do bookkeeping and dispatching here in Player Manager,
 			// So we extract state, timestamp and UUID. (Converted to FGuid for faster comparison.)
 			FSampleActorUpdate Update;
 			Update.State = State;
 			Update.ServerTimestamp = ActorUpdateNotificationMessage.Timestamp;
-			Update.UUID = USerializationFunctionLibrary::ToGuid(ActorUpdateNotificationMessage.UUID);
+			Update.UUID = ActorUpdateNotificationMessage.GUID; // Already converted to FGuid at deserialization time
 
 			// We pass the update data to the handler
 			HandleActorUpdateMessage(Update);
@@ -171,10 +181,10 @@ TArray<ECrowdyMessageType> ASamplePlayerManager::GetSupportedResponseTypes() con
 {
 	/* 
 	* This tells the SDK which messages should be dispatched to this particular actor/object
-	* This doesn't mean that only this actor will get these message types, multiple actors/objects can subscribe to same
+	* This doesn't mean that only this actor will get these message types, multiple actors/objects can subscribe to the same
 	* message types.
 	* In this sample we're only aiming at this class to handle the Actor Updates, so we're only providing implementation here.
-	* In addition to the actor updates, we are also processing Game Events related to the actors here, so we are also expecing 
+	* In addition to the actor updates, we are also processing Game Events related to the actors here, so we are also expecting 
 	* those messages to be processed in here.
 	*/
 	return TArray
@@ -185,11 +195,24 @@ TArray<ECrowdyMessageType> ASamplePlayerManager::GetSupportedResponseTypes() con
 	};
 }
 
+// This function tells the SDK that I want to handle these specific type of actor updates that I have registered in the Data Asset
+// Check DA_SampleActorUpdates for details
+// The Names must match in the data asset and here, otherwise it will fail
+TArray<FName> ASamplePlayerManager::GetSupportedActorUpdateTypes() const
+{
+	return {FName("SampleActorState")};
+}
+
+// This override tells the SDK that I want to handle this specific type of game event from the registered ones in the Data Asset
+// Check DA_SampleEvents
+// The Names must match in the data asset and here, otherwise it will fail
 TArray<FName> ASamplePlayerManager::GetSupportedEventTypes() const
 {
 	return TArray{FName("ChangeAnimState")};
 }
 
+
+// Simple toggle for owner Ghost 
 void ASamplePlayerManager::SetOwnerGhostEnabled(const bool bEnable)
 {
 	bEnableOwnerGhost = bEnable;
@@ -197,7 +220,8 @@ void ASamplePlayerManager::SetOwnerGhostEnabled(const bool bEnable)
 
 void ASamplePlayerManager::HandleActorUpdateMessage(const FSampleActorUpdate& Update)
 {
-	/* This returns a deterministic index so that workers only pull 
+	/* 
+	 * This returns a deterministic index so that workers only pull 
 	 * from their own queues since it's a single consumer model
 	*/
 	const int32 WorkerIndex = GetTypeHash(Update.UUID) % NumberOfWorkerThreads;
@@ -224,25 +248,20 @@ void ASamplePlayerManager::HandleActorUpdateMessage(const FSampleActorUpdate& Up
 
 void ASamplePlayerManager::HandleGameEvent(const FGameEventNotification& GameEventNotification) const
 {
-	FInstancedStruct EventState;
+	// "State" is now deserialized FInstancedStruct ready to be used. So we get it's type 
+	const UScriptStruct* StructType = GameEventNotification.State.GetScriptStruct();
 	
-	if (!USerializationFunctionLibrary::DeserializeEventState(GameEventNotification.StateBytes, EventState))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[SamplePlayerManager][HandleGameEvent]: Failed to deserialize event state."));
-		return;
-	}
-	
-	const UScriptStruct* StructType = EventState.GetScriptStruct();
-	
+	// If type is invalid we return
 	if (!StructType)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[SamplePlayerManager][HandleGameEvent]: Invalid script struct."));
 		return;
 	}
 	
+	// Since we're only handling FChangeAnimState in here, we ensure that it's the one we receive.
 	if (StructType == FChangeAnimState::StaticStruct())
 	{
-		FChangeAnimState Data = EventState.Get<FChangeAnimState>();
+		FChangeAnimState Data = GameEventNotification.State.Get<FChangeAnimState>();
 		
 		FGuid UUID = Data.TargetID;
 		ESampleAnimState AnimState = Data.NewState;
@@ -256,9 +275,11 @@ void ASamplePlayerManager::HandleGameEvent(const FGameEventNotification& GameEve
 
 void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 {
+	// Make local arrays
 	TArray<FSampleActorUpdate> LocalUpdateBatch;
 	LocalUpdateBatch.Reserve(MaxUpdatesPerBatch);
 
+	// Keep track of when batch was started
 	const double BatchStartTime = FPlatformTime::Seconds();
 
 	while (true)
@@ -272,6 +293,7 @@ void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 			LocalUpdateBatch.Add(MoveTemp(Update));
 		}
 
+		// Elapsed time
 		const double ElapsedTime = FPlatformTime::Seconds() - BatchStartTime;
 
 		// Exit conditions
@@ -300,7 +322,8 @@ void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 
 	{
 		FReadScopeLock R(UUIDLock);
-
+		
+		// Loop over and seperate updates for existing and new UUIDs
 		for (const FSampleActorUpdate& Update : LocalUpdateBatch)
 		{
 			const FGuid& UUID = Update.UUID;
@@ -312,11 +335,13 @@ void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 		}
 	}
 
+	// Dispatch for existing UUIDs
 	for (const FSampleActorUpdate* Update : UpdatesForExisting)
 	{
 		PawnManager->AppendInstanceUpdate(*Update);
 	}
 
+	// Process new UUIDs
 	if (!NewUpdates.IsEmpty())
 	{
 		TArray<FSampleActorUpdate> NewUpdatesCopy;
@@ -330,7 +355,9 @@ void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 				NewUpdatesCopy.Add(*Update);
 			}
 		}
-
+	
+		
+		// Dispatching to game thread since Actor Creation is not thread-safe. Note that at this point we are still on worker thread(s)
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [this, Updates = MoveTemp(NewUpdatesCopy)]
 		{
 			for (const FSampleActorUpdate& Update : Updates)
@@ -359,6 +386,7 @@ void ASamplePlayerManager::ProcessUpdateQueue(const int32 WorkerIndex)
 	}
 }
 
+// Function that checks for timed out actors
 void ASamplePlayerManager::CheckForActorTimeouts()
 {
 	const float CurrentTime = FPlatformTime::Seconds();
@@ -386,6 +414,7 @@ void ASamplePlayerManager::CheckForActorTimeouts()
 	ProcessTimedOutActors(TimedOutActors);
 }
 
+// For processing timed out actors i.e. removing them from world
 void ASamplePlayerManager::ProcessTimedOutActors(const TArray<FGuid>& TimedOutActors)
 {
 	if (!IsValid(this))

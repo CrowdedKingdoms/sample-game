@@ -1,7 +1,9 @@
 ﻿#include "FCrowdyServiceRegistry.h"
 #include "Core/UDP/Interfaces/ICrowdyMessage.h"
 #include "Core/UDP/Interfaces/ICrowdyReceptionLayer.h"
+#include "Messages/Actor/FActorUpdateNotificationMessage.h"
 #include "Messages/GameObjects/FGameEventNotification.h"
+#include "Utils/UActorUpdatePayloadRegistry.h"
 #include "Utils/UEventPayloadRegistry.h"
 
 void FCrowdyServiceRegistry::RegisterService(FName Name, ICrowdyService* Service)
@@ -12,42 +14,60 @@ void FCrowdyServiceRegistry::RegisterService(FName Name, ICrowdyService* Service
 void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer)
 {
 	
-	if (!Layer)
-		return;
-	
 	if (!Layer) return;
 
-	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
-	
-	for (ECrowdyMessageType Type : SupportedTypes)
-	{
-		// Preallocate small buffer to avoid reallocations
-		if (!ReceptionLayersByType.Contains(Type))
-		{
-			ReceptionLayersByType.Add(Type, TArray<ICrowdyReceptionLayer*>());
-			ReceptionLayersByType[Type].Reserve(8);
-		}
-
-		ReceptionLayersByType[Type].Add(Layer);
-	}
-	
 	const auto& SubscribedEvents = Layer->GetSupportedEventTypes();
-	
+	const auto& SubscribedActorUpdates = Layer->GetSupportedActorUpdateTypes();
+	const bool bHasSubscriptions = !SubscribedEvents.IsEmpty() || !SubscribedActorUpdates.IsEmpty();
+
+	if (!bHasSubscriptions)
+	{
+		const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
+		for (ECrowdyMessageType Type : SupportedTypes)
+		{
+			if (!ReceptionLayersByType.Contains(Type))
+			{
+				ReceptionLayersByType.Add(Type, TArray<ICrowdyReceptionLayer*>());
+				ReceptionLayersByType[Type].Reserve(8);
+			}
+			ReceptionLayersByType[Type].Add(Layer);
+		}
+	}
+
+	// Events
 	if (SubscribedEvents.IsEmpty())
 	{
 		UnfilteredEventLayers.Add(Layer);
-		return;
 	}
-	
-	for (auto& Events : SubscribedEvents)
+	else
 	{
-		if (!SubscribedEventLayers.Contains(Events))
+		for (auto& Event : SubscribedEvents)
 		{
-			SubscribedEventLayers.Add(Events, TArray<ICrowdyReceptionLayer*>());
-			SubscribedEventLayers[Events].Reserve(8);
+			if (!SubscribedEventLayers.Contains(Event))
+			{
+				SubscribedEventLayers.Add(Event, TArray<ICrowdyReceptionLayer*>());
+				SubscribedEventLayers[Event].Reserve(8);
+			}
+			SubscribedEventLayers[Event].Add(Layer);
 		}
-		
-		SubscribedEventLayers[Events].Add(Layer);
+	}
+
+	// Actor Updates
+	if (SubscribedActorUpdates.IsEmpty())
+	{
+		UnfilteredActorUpdateLayers.Add(Layer);
+	}
+	else
+	{
+		for (auto& ActorUpdate : SubscribedActorUpdates)
+		{
+			if (!SubscribedActorUpdateLayers.Contains(ActorUpdate))
+			{
+				SubscribedActorUpdateLayers.Add(ActorUpdate, TArray<ICrowdyReceptionLayer*>());
+				SubscribedActorUpdateLayers[ActorUpdate].Reserve(8);
+			}
+			SubscribedActorUpdateLayers[ActorUpdate].Add(Layer);
+		}
 	}
 }
 
@@ -56,26 +76,43 @@ void FCrowdyServiceRegistry::DeregisterAllReceptionLayers()
 	ReceptionLayersByType.Empty();
 	UnfilteredEventLayers.Empty();
 	SubscribedEventLayers.Empty();
+	SubscribedActorUpdateLayers.Empty();
+	UnfilteredActorUpdateLayers.Empty();
 	UE_LOG(LogTemp, Log, TEXT("Deregistered all reception layers."));
 }
 
 bool FCrowdyServiceRegistry::IsLayerRegistered(const ICrowdyReceptionLayer* Layer) const
 {
-	if (!Layer)
-		return false;
-	
-	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
-	
-	for (const ECrowdyMessageType Type : SupportedTypes)
-	{
-		if (!ReceptionLayersByType.Contains(Type))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[CrowdyServiceRegistry]: Layer Not registered"));
-			return false;
-		}
-	}
-	
-	return true;
+	if (!Layer) return false;
+    
+        const auto& SubscribedEvents = Layer->GetSupportedEventTypes();
+        const auto& SubscribedActorUpdates = Layer->GetSupportedActorUpdateTypes();
+    
+        if (!SubscribedEvents.IsEmpty())
+        {
+            for (const FName& Event : SubscribedEvents)
+            {
+                if (!SubscribedEventLayers.Contains(Event)) return false;
+            }
+            return true;
+        }
+    
+        if (!SubscribedActorUpdates.IsEmpty())
+        {
+            for (const FName& ActorUpdate : SubscribedActorUpdates)
+            {
+                if (!SubscribedActorUpdateLayers.Contains(ActorUpdate)) return false;
+            }
+            return true;
+        }
+    
+        // No subscriptions — must be in ReceptionLayersByType
+        for (const ECrowdyMessageType Type : Layer->GetSupportedResponseTypes())
+        {
+            if (!ReceptionLayersByType.Contains(Type)) return false;
+        }
+    
+        return true;
 }
 
 
@@ -87,6 +124,12 @@ void FCrowdyServiceRegistry::DispatchMessage(const TSharedRef<ICrowdyMessage, ES
 	if (ResponseType == ECrowdyMessageType::CLIENT_EVENT_NOTIFICATION)
 	{
 		DispatchEventNotification(Message);
+		return;
+	}
+	
+	if (ResponseType == ECrowdyMessageType::ACTOR_UPDATE_NOTIFICATION)
+	{
+		DispatchActorUpdateNotification(Message);
 		return;
 	}
 	
@@ -135,4 +178,34 @@ void FCrowdyServiceRegistry::DispatchEventNotification(const TSharedRef<ICrowdyM
 	}
 
 	
+}
+
+void FCrowdyServiceRegistry::DispatchActorUpdateNotification(
+	const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message)
+{
+	// Cast to your actor update message type — adjust to whatever yours is called
+	auto& ActorUpdateMessage = static_cast<FActorUpdateNotificationMessage&>(*Message);
+	
+	if (!ActorUpdateMessage.State.IsValid())
+	{
+		// Legacy layers — always receive all events
+		for (ICrowdyReceptionLayer* Layer : UnfilteredActorUpdateLayers)
+		{
+			if (Layer) Layer->OnMessageReceived(Message);
+		}
+		return;
+	}
+	
+	uint8 ActorUpdateID;
+	FName ActorUpdateName;
+	UActorUpdatePayloadRegistry::Get()->GetID(ActorUpdateMessage.State.GetScriptStruct(), ActorUpdateID);
+	UActorUpdatePayloadRegistry::Get()->GetName(ActorUpdateID, ActorUpdateName);
+
+	if (const TArray<ICrowdyReceptionLayer*>* SubscribedLayers = SubscribedActorUpdateLayers.Find(ActorUpdateName))
+	{
+		for (ICrowdyReceptionLayer* Layer : *SubscribedLayers)
+		{
+			if (Layer) Layer->OnMessageReceived(Message);
+		}
+	}
 }

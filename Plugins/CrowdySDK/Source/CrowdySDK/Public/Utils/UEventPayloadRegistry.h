@@ -49,7 +49,9 @@ private:
 	UPROPERTY()
 	TMap<int32, TObjectPtr<UScriptStruct>> IDToStruct;
 
-	TMap<FName, int32> StructToID;
+	UPROPERTY()
+	TMap<const UScriptStruct*, int32> StructToID;
+	
 	TMap<int32, FName> IDToName;
 	
 	std::atomic<bool> bLoaded { false };

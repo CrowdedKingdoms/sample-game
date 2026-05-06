@@ -44,7 +44,7 @@ struct FGameEventNotification : ICrowdyMessage
 	 */
 	int32 StateSize;
 	TArray<uint8> StateBytes;
-	
+	FInstancedStruct State;
 	
 	/**
 	 * Retrieves the type of the current object or instance.
@@ -138,6 +138,10 @@ struct FGameEventNotification : ICrowdyMessage
 		
 		StateBytes.SetNumUninitialized(StateSize);
 		FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+		
+		if (!USerializationFunctionLibrary::DeserializeEventState(StateBytes, State))
+			State.Reset();
+		
 		return true;
 	}
 

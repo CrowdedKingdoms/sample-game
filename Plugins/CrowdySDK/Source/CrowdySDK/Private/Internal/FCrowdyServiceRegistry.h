@@ -14,6 +14,7 @@ class ICrowdyMessage;
 class CROWDYSDK_API FCrowdyServiceRegistry
 {
 public:
+	
 	FCrowdyServiceRegistry() = default;
 	~FCrowdyServiceRegistry() = default;
 	
@@ -32,6 +33,7 @@ private:
 	
 	void DispatchToLayers(ECrowdyMessageType ResponseType, const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
 	void DispatchEventNotification(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
+	void DispatchActorUpdateNotification(const TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe>& Message);
 	
 	/** Named Serviced **/
 	TMap<FName, ICrowdyService*> Services;
@@ -39,12 +41,19 @@ private:
 	/** All Message Listeners **/
 	TArray<ICrowdyReceptionLayer*> ReceptionLayers;
 	
-	/** Map of message type to reception layers */
+	/** Map of a message type to reception layers */
 	TMap<ECrowdyMessageType, TArray<ICrowdyReceptionLayer*>> ReceptionLayersByType;
 	
 	// Specific Game Events handled, not Message Types
 	TMap<FName, TArray<ICrowdyReceptionLayer*>> SubscribedEventLayers;
 	
+	// Specific Actor updates handled
+	TMap<FName, TArray<ICrowdyReceptionLayer*>> SubscribedActorUpdateLayers;
+	
+	// For legacy support
 	TArray<ICrowdyReceptionLayer*> UnfilteredEventLayers;
+	
+	// For Legacy support
+	TArray<ICrowdyReceptionLayer*> UnfilteredActorUpdateLayers;
 
 };

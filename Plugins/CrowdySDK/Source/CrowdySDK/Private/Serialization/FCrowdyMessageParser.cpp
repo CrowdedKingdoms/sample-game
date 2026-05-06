@@ -83,6 +83,7 @@ TSharedRef<ICrowdyMessage, ESPMode::ThreadSafe> FCrowdyMessageParser::ParseMessa
 		{
 			TSharedRef<FActorUpdateNotificationMessage, ESPMode::ThreadSafe> Message = MakeShared<FActorUpdateNotificationMessage>();
 			Message->SetExpectedStateSize(ExpectedActorStateSize);
+			
 			if (!Message->Deserialize(Payload))
 			{
 				return MakeShared<FDefaultMessage>();

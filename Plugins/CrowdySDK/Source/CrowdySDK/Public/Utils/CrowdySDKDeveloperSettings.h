@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/ActorUpdatePayloadType.h"
 #include "Data/EventPayloadType.h"
 #include "Engine/DeveloperSettings.h"
 #include "CrowdySDKDeveloperSettings.generated.h"
@@ -20,6 +21,12 @@ public:
 	virtual FName GetCategoryName() const override { return "Plugins"; }
 	virtual FName GetSectionName() const override { return "Crowdy SDK"; }
 	
-	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer")
+	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Generic")
+	int64 AppID = 1;
+	
+	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Events")
 	TSoftObjectPtr<UEventPayloadType> EventPayloadDataAsset;
+	
+	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Actor Updates")
+	TSoftObjectPtr<UActorUpdatePayloadType> ActorUpdatePayloadDataAsset;
 };

@@ -55,6 +55,11 @@ public:
 	 */
 	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const = 0;
 	
+	virtual TArray<FName> GetSupportedActorUpdateTypes() const
+	{
+		return {};
+	}
+	
 	// New function to allow selected dispatch of events
 	virtual TArray<FName> GetSupportedEventTypes() const
 	{

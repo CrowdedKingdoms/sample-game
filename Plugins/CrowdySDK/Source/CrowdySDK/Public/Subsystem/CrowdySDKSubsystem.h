@@ -162,6 +162,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Config")
 	void OverrideEventDataAsset(const UEventPayloadType* DataAsset);
 	
+	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Replication|Actor Updates")
+	void DispatchActorUpdate(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
+	                         const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
+	                         const FString& InstigatorUUID, FInstancedStruct ActorStatePayload, bool bAsync = false) const;
+	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Replication|Events")
 	void DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
 	                       const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
@@ -231,6 +236,7 @@ private:
 	void HandleVersionInfoResponse(const FVersionInfoResponse& VersionInfoResponse) const;
 	void HandleTeleportPermissionResponse(const FTeleportResponse& TeleportResponse) const;
 	bool ValidateVoiceChatSubsystem();
+	bool TryLoadConfiguration();
 	
 	UFUNCTION()
 	void OnUDPTimeout();

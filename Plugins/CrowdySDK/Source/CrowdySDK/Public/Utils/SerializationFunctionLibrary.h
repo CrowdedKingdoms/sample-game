@@ -157,6 +157,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Serialization Function Library")
 	static FString GenerateVoxelID(int64 ChunkX, int64 ChunkY, int64 ChunkZ, int32 VoxelX, int32 VoxelY, int32 VoxelZ);
 	
+	static bool SerializeActorState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes);
+	static bool DeserializeActorState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload);
+	
 	static bool SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes);
 	static bool DeserializeEventState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload);
 	

@@ -2,7 +2,6 @@
 
 
 #include "Core/Managers/SamplePawnManager.h"
-
 #include "Core/Structs/Game/FSampleActorUpdate.h"
 #include "Interfaces/ReplicatedActor.h"
 
@@ -28,7 +27,7 @@ void ASamplePawnManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	
-	// We perform these operation per tick
+	// We perform these operations per tick
 	ApplyPendingUpdates();
 	UpdateMovementData();
 	ApplyTransformData();

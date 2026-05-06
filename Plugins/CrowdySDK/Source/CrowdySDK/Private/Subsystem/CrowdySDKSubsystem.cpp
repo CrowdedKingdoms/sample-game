@@ -13,6 +13,7 @@
 #include "Internal/FCrowdyServiceRegistry.h"
 #include "Internal/FCrowdyDataRegistry.h"
 #include "Messages/FPingTestMessage.h"
+#include "Messages/Actor/FActorUpdateRequestMessage.h"
 #include "Messages/GameObjects/FGameEventRequest.h"
 #include "Network/GraphQL/CrowdyQuerySubsystem.h"
 #include "Network/UDP/FCrowdyTransmissionLayerUDP.h"
@@ -33,6 +34,7 @@
 #include "Queries/UDP/FUDPAddressNotify.h"
 #include "Queries/UDP/FUDPAddressRequest.h"
 #include "Utils/CrowdySDKDeveloperSettings.h"
+#include "Utils/UActorUpdatePayloadRegistry.h"
 #include "Utils/UEventPayloadRegistry.h"
 
 void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -92,22 +94,8 @@ void UCrowdySDKSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	UdpSubsystem->OnUDPConnectionSuccessful.AddDynamic(this, &UCrowdySDKSubsystem::OnUDPConnectionSuccessful);
 	UdpSubsystem->OnUDPTimeout.AddDynamic(this, &UCrowdySDKSubsystem::OnUDPTimeout);
 
-	const UCrowdySDKDeveloperSettings* Settings = GetDefault<UCrowdySDKDeveloperSettings>();
-	
-	if (!IsValid(Settings) || Settings->EventPayloadDataAsset.IsNull())
-	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: PayloadTypeDataAsset not set in Project Settings -> Crowdy SDK."));
-		return;
-	}
-	
-	if (const UEventPayloadType* DataAsset = Settings->EventPayloadDataAsset.LoadSynchronous())
-	{
-		UEventPayloadRegistry::Get()->LoadFromDataAsset(DataAsset);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Event Payload Data Asset is null or invalid."));
-	}
+	if (!TryLoadConfiguration())
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Failed to load registered assets."));
 	
 	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] CrowdySDK Subsystem Initialized (PostWorldInit)"));
 }
@@ -120,6 +108,8 @@ void UCrowdySDKSubsystem::Deinitialize()
 	TransmissionLayer = nullptr;
 	UEventPayloadRegistry::Get()->Reset();
 	UEventPayloadRegistry::Get()->Shutdown();
+	UActorUpdatePayloadRegistry::Get()->Reset();
+	UActorUpdatePayloadRegistry::Get()->Shutdown();
 	Super::Deinitialize();
 }
 
@@ -303,6 +293,56 @@ void UCrowdySDKSubsystem::OverrideEventDataAsset(const UEventPayloadType* DataAs
 	
 }
 
+void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
+                                              const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
+                                              const FString& InstigatorUUID, FInstancedStruct ActorStatePayload, const bool bAsync) const
+{
+	auto BuildAndDispatch = [this, ChunkX, ChunkY, ChunkZ, DecayRate, ReplicationDistance, InstigatorUUID, 
+		
+	ActorStatePayload = MoveTemp(ActorStatePayload)]() mutable
+	{
+		FActorUpdateRequestMessage ActorUpdateRequest;
+		ActorUpdateRequest.AppID = GameSession->GetAppID();
+		ActorUpdateRequest.ChunkX = ChunkX;
+		ActorUpdateRequest.ChunkY = ChunkY;
+		ActorUpdateRequest.ChunkZ = ChunkZ;
+		ActorUpdateRequest.DecayRate = DecayRate;
+		ActorUpdateRequest.ReplicationDistance = ReplicationDistance;
+		ActorUpdateRequest.UUID = InstigatorUUID;
+		
+		uint8 StateID;
+		
+		if (!UActorUpdatePayloadRegistry::Get()->GetID(ActorStatePayload.GetScriptStruct(), StateID))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Actor Update Payload not registered."));
+			return;
+		}
+		
+		if (!USerializationFunctionLibrary::SerializeActorState(ActorStatePayload, ActorUpdateRequest.StateBytes))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Failed to serialize actor state payload."));
+			return;
+		}
+		
+		ActorUpdateRequest.StateSize = ActorUpdateRequest.StateBytes.Num();
+		
+		SendMessage(ActorUpdateRequest);
+	};
+	
+	if (bAsync)
+	{
+		UE::Tasks::Launch(
+			UE_SOURCE_LOCATION, 
+			MoveTemp(BuildAndDispatch), 
+			LowLevelTasks::ETaskPriority::BackgroundNormal
+			);
+	}
+	else
+	{
+		BuildAndDispatch();
+	}
+}
+
 void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
                                             const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
                                             const FString& InstigatorUUID, FInstancedStruct EventPayload, const bool bAsync) const
@@ -317,7 +357,7 @@ void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 Chun
 	{
 		FGameEventRequest EventRequest;
 
-		EventRequest.AppID = 2;
+		EventRequest.AppID = GameSession->GetAppID();
 		EventRequest.ChunkX = ChunkX;
 		EventRequest.ChunkY = ChunkY;
 		EventRequest.ChunkZ = ChunkZ;
@@ -436,6 +476,38 @@ bool UCrowdySDKSubsystem::ValidateVoiceChatSubsystem()
 	VoiceChatSubsystem->InitializeVoiceChatSubsystem(VoiceChatService);
 	VoiceChatService->SetVoiceChatManagerReference(VoiceChatSubsystem);
 	return IsValid(VoiceChatSubsystem);
+}
+
+bool UCrowdySDKSubsystem::TryLoadConfiguration()
+{
+	const UCrowdySDKDeveloperSettings* Settings = GetDefault<UCrowdySDKDeveloperSettings>();
+	
+	if (!IsValid(Settings) || Settings->EventPayloadDataAsset.IsNull() || Settings->ActorUpdatePayloadDataAsset.IsNull())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: PayloadTypeDataAsset or ActorUpdateDataAsset not set in Project Settings->Plugins->Crowdy SDK."));
+		return false;
+	}
+	
+	GameSession->SetAppID(Settings->AppID);
+	
+	if (const UEventPayloadType* DataAsset = Settings->EventPayloadDataAsset.LoadSynchronous())
+	{
+		UEventPayloadRegistry::Get()->LoadFromDataAsset(DataAsset);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK]: Event Payload Data Asset is null or invalid."));
+		return false;
+	}
+	
+	if (const UActorUpdatePayloadType* DataAsset = Settings->ActorUpdatePayloadDataAsset.LoadSynchronous())
+	{
+		UActorUpdatePayloadRegistry::Get()->LoadFromDataAsset(DataAsset);
+		return true;
+	}
+	
+	return false;
+	
 }
 
 void UCrowdySDKSubsystem::OnUDPTimeout()

@@ -2,6 +2,7 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+#include "Utils/UActorUpdatePayloadRegistry.h"
 #include "Utils/UEventPayloadRegistry.h"
 
 FString USerializationFunctionLibrary::DeserializeString(const TArray<uint8>& Payload, int32 Offset, int32 Length)
@@ -227,22 +228,22 @@ FString USerializationFunctionLibrary::GenerateVoxelID(int64 ChunkX, int64 Chunk
 	return Result;
 }
 
-bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes)
-{
+bool USerializationFunctionLibrary::SerializeActorState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes)
+{ 
 	const UScriptStruct* StructType = Payload.GetScriptStruct();
 	const void* StructMemory = Payload.GetMemory();
 	
 	if (!StructType || !StructMemory)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[SerializePayload]: Invalid script struct or memory pointer"));
+		UE_LOG(LogTemp, Error, TEXT("[SerializeActorState]: Invalid script struct or memory pointer"));
 		return false;
 	}
 	
-	int32 TypeID;
+	uint8 TypeID;
 	
-	if (!UEventPayloadRegistry::Get()->GetID(StructType, TypeID))
+	if (!UActorUpdatePayloadRegistry::Get()->GetID(StructType, TypeID))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[SerializePayload]: Failed to get ID for script struct"));
+		UE_LOG(LogTemp, Error, TEXT("[SerializeActorState]: Failed to get ID for script struct"));
 		return false;
 	}
 	
@@ -253,8 +254,69 @@ bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& 
 	
 	StructType->SerializeBin(Writer, const_cast<void*>(StructMemory));
 	
-	UE_LOG(LogTemp, Log, TEXT("[SerializePayload] '%s' -> TypeID=%d, Size=%d bytes"),
-		*StructType->GetName(), TypeID, OutBytes.Num());
+	//UE_LOG(LogTemp, Log, TEXT("[SerializeActorState] '%s' -> TypeID=%d, Size=%d bytes"),
+	//	*StructType->GetName(), TypeID, OutBytes.Num());
+	
+	return true;
+}
+
+bool USerializationFunctionLibrary::DeserializeActorState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload)
+{
+	if (Payload.Num() < sizeof(uint8))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Payload too small"));
+		return false;
+	}
+	
+	FMemoryReader Reader(Payload, true);
+	
+	uint8 TypeID;
+	Reader << TypeID;
+
+	const UScriptStruct* StructType = UActorUpdatePayloadRegistry::Get()->Resolve(TypeID);
+	
+	if (!StructType)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Failed to resolve script struct for TypeID=%d"), TypeID);
+		return false;
+	}
+	
+	OutPayload.InitializeAs(StructType);
+	StructType->SerializeBin(Reader, OutPayload.GetMutableMemory());
+	
+	//UE_LOG(LogTemp, Log, TEXT("[DeserializeActorState] TypeID=%d -> '%s'"), TypeID, *StructType->GetName());
+
+	return true;
+}
+
+bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes)
+{
+	const UScriptStruct* StructType = Payload.GetScriptStruct();
+	const void* StructMemory = Payload.GetMemory();
+	
+	if (!StructType || !StructMemory)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[SerializeEventState]: Invalid script struct or memory pointer"));
+		return false;
+	}
+	
+	int32 TypeID;
+	
+	if (!UEventPayloadRegistry::Get()->GetID(StructType, TypeID))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[SerializeEventState]: Failed to get ID for script struct"));
+		return false;
+	}
+	
+	OutBytes.Reset();
+	FMemoryWriter Writer(OutBytes, true);
+	
+	Writer << TypeID;
+	
+	StructType->SerializeBin(Writer, const_cast<void*>(StructMemory));
+	
+	//UE_LOG(LogTemp, Log, TEXT("[SerializeEventState] '%s' -> TypeID=%d, Size=%d bytes"),
+	//	*StructType->GetName(), TypeID, OutBytes.Num());
 	
 	return true;
 	
@@ -264,7 +326,7 @@ bool USerializationFunctionLibrary::DeserializeEventState(const TArray<uint8>& P
 {
 	if (Payload.Num() < sizeof(int32))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[DeserializePayload]: Payload too small"));
+		//UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Payload too small"));
 		return false;
 	}
 	
@@ -277,14 +339,14 @@ bool USerializationFunctionLibrary::DeserializeEventState(const TArray<uint8>& P
 	
 	if (!StructType)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[DeserializePayload]: Failed to resolve script struct for TypeID=%d"), TypeID);
+		//UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Failed to resolve script struct for TypeID=%d"), TypeID);
 		return false;
 	}
 	
 	OutPayload.InitializeAs(StructType);
 	StructType->SerializeBin(Reader, OutPayload.GetMutableMemory());
 	
-	UE_LOG(LogTemp, Log, TEXT("[DeserializePayload] TypeID=%d -> '%s'"), TypeID, *StructType->GetName());
+	//UE_LOG(LogTemp, Log, TEXT("[DeserializeEventState] TypeID=%d -> '%s'"), TypeID, *StructType->GetName());
 
 	return true;
 }

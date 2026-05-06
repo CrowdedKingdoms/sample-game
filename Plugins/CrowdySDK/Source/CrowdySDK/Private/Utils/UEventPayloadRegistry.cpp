@@ -24,7 +24,7 @@ void UEventPayloadRegistry::LoadFromDataAsset(const UEventPayloadType* DataAsset
 			continue;
 		}
 
-		StructToID.Add(Entry.EventType->GetFName(), Entry.TypeID);
+		StructToID.Add(Entry.EventType, Entry.TypeID);
 		IDToStruct.Add(Entry.TypeID, Entry.EventType);
 		IDToName.Add(Entry.TypeID, Entry.EventName);
 
@@ -40,7 +40,7 @@ bool UEventPayloadRegistry::GetID(const UScriptStruct* Struct, int32& OutID) con
 	if (!bLoaded.load(std::memory_order_acquire)) return false;
 	if (!Struct) return false;
 
-	const int32* Found = StructToID.Find(Struct->GetFName());
+	const int32* Found = StructToID.Find(Struct);
 	if (Found) { OutID = *Found; return true; }
 	return false;
 }

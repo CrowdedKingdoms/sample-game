@@ -18,7 +18,7 @@ struct FActorUpdateNotificationMessage : ICrowdyMessage
 	int32 StateSize;
 	int32 ExpectedStateSize = 300;
 	TArray<uint8> StateBytes;
-	
+	FInstancedStruct State;
 	
 	/**
 	 * Retrieves the specific type of the message.
@@ -76,7 +76,7 @@ struct FActorUpdateNotificationMessage : ICrowdyMessage
 		
 		Offset += sizeof(StateSize);
 		
-		if (StateSize <= 0 || StateSize != ExpectedStateSize)
+		if (StateSize <= 0)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("FActorUpdateNotificationMessage::Deserialize - StateSize is out of valid range %d expected %d."), 
 			StateSize, ExpectedStateSize);
@@ -94,6 +94,9 @@ struct FActorUpdateNotificationMessage : ICrowdyMessage
 		
 		StateBytes.SetNumUninitialized(StateSize);
 		FMemory::Memcpy(StateBytes.GetData(), Data.GetData() + Offset, StateSize);
+		
+		if (!USerializationFunctionLibrary::DeserializeActorState(StateBytes, State))
+			State.Reset();
 		
 		return true;
 	}
