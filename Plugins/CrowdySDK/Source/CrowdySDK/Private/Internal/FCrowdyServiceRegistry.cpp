@@ -18,11 +18,12 @@ void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer
 
 	const auto& SubscribedEvents = Layer->GetSupportedEventTypes();
 	const auto& SubscribedActorUpdates = Layer->GetSupportedActorUpdateTypes();
+	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
 	const bool bHasSubscriptions = !SubscribedEvents.IsEmpty() || !SubscribedActorUpdates.IsEmpty();
-
+	
+	
 	if (!bHasSubscriptions)
 	{
-		const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
 		for (ECrowdyMessageType Type : SupportedTypes)
 		{
 			if (!ReceptionLayersByType.Contains(Type))
@@ -35,7 +36,7 @@ void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer
 	}
 
 	// Events
-	if (SubscribedEvents.IsEmpty())
+	if (SubscribedEvents.IsEmpty() && SupportedTypes.Contains(ECrowdyMessageType::CLIENT_EVENT_NOTIFICATION))
 	{
 		UnfilteredEventLayers.Add(Layer);
 	}
@@ -53,7 +54,7 @@ void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer
 	}
 
 	// Actor Updates
-	if (SubscribedActorUpdates.IsEmpty())
+	if (SubscribedActorUpdates.IsEmpty() && SupportedTypes.Contains(ECrowdyMessageType::ACTOR_UPDATE_NOTIFICATION))
 	{
 		UnfilteredActorUpdateLayers.Add(Layer);
 	}
