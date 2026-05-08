@@ -32,27 +32,27 @@
 UENUM(BlueprintType)
 enum class ECrowdyMessageType : uint8
 {
-    BAD_MESSAGE = 0  UMETA(DisplayName = "Bad Message"),
-    RESERVED_1 = 1 UMETA(DisplayName = "Reserved 1"),
-    MESSAGE_BUNDLE = 2 UMETA(DisplayName = "Message Bundle"),
-    GENERIC_ERROR_MESSAGE = 3 UMETA(DisplayName = "Generic Error Message"),
-    RESERVED_13 = 13 UMETA(DisplayName = "Reserved 13"),
+    BAD_MESSAGE = 0  UMETA(DisplayName = "!! INVALID - Do not use !!", Hidden),
+    RESERVED_1 = 1 UMETA(DisplayName = "Reserved 1", Hidden),
+    MESSAGE_BUNDLE = 2 UMETA(DisplayName = "Message Bundle", Hidden),
+    GENERIC_ERROR_MESSAGE = 3 UMETA(DisplayName = "Generic Error Message", Hidden),
+    RESERVED_13 = 13 UMETA(DisplayName = "Reserved 13", Hidden),
     
     
     
-    ACTOR_UPDATE_REQUEST = 128 UMETA(DisplayName = "Actor Update Request"),
+    ACTOR_UPDATE_REQUEST = 128 UMETA(DisplayName = "Actor Update Request", Hidden),
     ACTOR_UPDATE_RESPONSE = 129 UMETA(DisplayName = "Actor Update Response"),
     ACTOR_UPDATE_NOTIFICATION = 130 UMETA(DisplayName = "Actor Update Notification"),
-    VOXEL_UPDATE_REQUEST = 131 UMETA(DisplayName = "Voxel Update Request"),
+    VOXEL_UPDATE_REQUEST = 131 UMETA(DisplayName = "Voxel Update Request", Hidden),
     VOXEL_UPDATE_RESPONSE = 132 UMETA(DisplayName = "Voxel Update Response"),
     VOXEL_UPDATE_NOTIFICATION = 133 UMETA(DisplayName = "Voxel Update Notification"),
-    CLIENT_AUDIO_PACKET = 134 UMETA(DisplayName = "Client Audio Packet"),
-    CLIENT_AUDIO_NOTIFICATION = 135 UMETA(DisplayName = "Client Audio Notification"),
-    CLIENT_TEXT_PACKET = 136 UMETA(DisplayName = "Client Text Packet"),
-    CLIENT_TEXT_NOTIFICATION = 137 UMETA(DisplayName = "Client Text Notification"),
+    CLIENT_AUDIO_PACKET = 134 UMETA(DisplayName = "Client Audio Packet", Hidden),
+    CLIENT_AUDIO_NOTIFICATION = 135 UMETA(DisplayName = "Client Audio Notification", Hidden),
+    CLIENT_TEXT_PACKET = 136 UMETA(DisplayName = "Client Text Packet", Hidden),
+    CLIENT_TEXT_NOTIFICATION = 137 UMETA(DisplayName = "Client Text Notification", Hidden),
     CLIENT_EVENT_NOTIFICATION = 138 UMETA(DisplayName = "Client Event Notification"),
-    SERVER_EVENT_NOTIFICATION = 139 UMETA(DisplayName = "Server Event Notification"),
-    GENERIC_SPATIAL_1 = 140 UMETA(DisplayName = "Generic Spatial 1"),
+    SERVER_EVENT_NOTIFICATION = 139 UMETA(DisplayName = "Server Event Notification", Hidden),
+    GENERIC_SPATIAL_1 = 140 UMETA(DisplayName = "Generic Spatial 1", Hidden),
 };
 
 
