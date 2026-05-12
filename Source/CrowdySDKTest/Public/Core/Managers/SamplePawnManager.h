@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Core/Structs/Game/FSampleActorUpdate.h"
 #include "GameFramework/Actor.h"
+#include "Replication/Subsystems/CrowdyActorTracker.h"
+#include "StructUtils/InstancedStruct.h"
 #include "SamplePawnManager.generated.h"
 
 enum class ESampleAnimState : uint8;
@@ -70,6 +72,14 @@ private:
 
 
 private:
+	
+	UFUNCTION()
+	void OnActorSpawned(FGuid UUID, FInstancedStruct InitialState, int32 ActorCount);
+	
+	UFUNCTION()
+	void OnActorDestroyed(FGuid UUID, int32 ActorCount);
+	
+	void OnUpdateBatch(const TArray<FCrowdyActorUpdate>& Updates);
 	
 	void InitializePool();
 	static void ActivateActor(AActor* Actor, const FVector& Location, const FRotator& Rotation);

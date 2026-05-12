@@ -264,7 +264,7 @@ bool USerializationFunctionLibrary::DeserializeActorState(const TArray<uint8>& P
 {
 	if (Payload.Num() < sizeof(uint8))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Payload too small"));
+		//UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Payload too small"));
 		return false;
 	}
 	
@@ -277,7 +277,7 @@ bool USerializationFunctionLibrary::DeserializeActorState(const TArray<uint8>& P
 	
 	if (!StructType)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Failed to resolve script struct for TypeID=%d"), TypeID);
+		//UE_LOG(LogTemp, Error, TEXT("[DeserializeActorState]: Failed to resolve script struct for TypeID=%d"), TypeID);
 		return false;
 	}
 	

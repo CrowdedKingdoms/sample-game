@@ -31,13 +31,9 @@ public:
 	virtual void OnMessageReceived(TSharedRef<ICrowdyMessage> Message) override;
 	virtual TArray<ECrowdyMessageType> GetSupportedResponseTypes() const override;
 	
-	virtual TArray<FName> GetSupportedActorUpdateTypes() const override;
+	
 	virtual TArray<FName> GetSupportedEventTypes() const override;
-	
-	// Called from within different blueprints to enable or disable owner reflection 
-	UFUNCTION(BlueprintCallable, Category="Sample Player Manager|Config")
-	void SetOwnerGhostEnabled(const bool bEnable);
-	
+
 protected:
 	
 	// Called when the game starts or when spawned
@@ -95,14 +91,5 @@ private:
 	FRWLock TimeoutLock;
 	
 private:
-	
-	void SetupUpdateQueues();
-	void HandleActorUpdateMessage(const FSampleActorUpdate& Update);
 	void HandleGameEvent(const FGameEventNotification& GameEventNotification) const;
-	void ProcessUpdateQueue(int32 WorkerIndex);
-	void ProcessTimedOutActors(const TArray<FGuid>& TimedOutActors);
-	
-	UFUNCTION()
-	void CheckForActorTimeouts();
-	
 };

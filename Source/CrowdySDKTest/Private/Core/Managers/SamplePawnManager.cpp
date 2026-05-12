@@ -4,6 +4,7 @@
 #include "Core/Managers/SamplePawnManager.h"
 #include "Core/Structs/Game/FSampleActorUpdate.h"
 #include "Interfaces/ReplicatedActor.h"
+#include "Replication/Subsystems/CrowdyActorTracker.h"
 
 
 // Sets default values
@@ -17,6 +18,21 @@ ASamplePawnManager::ASamplePawnManager()
 void ASamplePawnManager::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	UCrowdyActorTracker* CrowdyActorTracker = GetWorld()->GetSubsystem<UCrowdyActorTracker>();
+	
+	check(CrowdyActorTracker)
+	
+	if (!IsValid(CrowdyActorTracker))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid Crowdy Actor Tracker subsystem."));
+		return;
+	}
+	
+	CrowdyActorTracker->OnSpawnRequested.AddDynamic(this, &ASamplePawnManager::OnActorSpawned);
+	CrowdyActorTracker->OnTimeoutRequested.AddDynamic(this, &ASamplePawnManager::OnActorDestroyed);
+	
+	CrowdyActorTracker->OnExistingUpdateWorkerBatch.AddUObject(this, &ASamplePawnManager::OnUpdateBatch);
 	
 	// Since we're using a pooled approach, we initialize the actor pool at begin play
 	InitializePool();
@@ -35,6 +51,65 @@ void ASamplePawnManager::Tick(float DeltaTime)
 }
 
 
+void ASamplePawnManager::OnActorSpawned(FGuid UUID, FInstancedStruct InitialState, int32 ActorCount)
+{
+	const UScriptStruct* StructType = InitialState.GetScriptStruct();
+	
+	if (!StructType)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid initial state."));
+		return;
+	}
+	
+	if (StructType != FSampleActorState::StaticStruct())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid initial state."));
+		return;
+	}
+
+	const FSampleActorState State = InitialState.Get<FSampleActorState>();
+	
+	FSampleActorUpdate Update;
+	Update.UUID = UUID;
+	Update.State = State;
+	Update.ServerTimestamp = GetEstimatedServerTimeMs();
+	
+	AddInstance(UUID, Update);
+}
+
+void ASamplePawnManager::OnActorDestroyed(FGuid UUID, int32 ActorCount)
+{
+	DestroyInstance(UUID);
+}
+
+void ASamplePawnManager::OnUpdateBatch(const TArray<FCrowdyActorUpdate>& Updates)
+{
+	for (const auto& Update : Updates)
+	{
+		const UScriptStruct* StructType = Update.State.GetScriptStruct();
+	
+		if (!StructType)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid update."));
+			continue;
+		}
+	
+		if (StructType != FSampleActorState::StaticStruct())
+		{
+			UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid update."));
+			continue;
+		}
+		
+		const FSampleActorState State = Update.State.Get<FSampleActorState>();
+		
+		FSampleActorUpdate UpdateCopy;
+		UpdateCopy.UUID = Update.UUID;
+		UpdateCopy.State = State;
+		UpdateCopy.ServerTimestamp = Update.ServerTimestamp;
+		
+		AppendInstanceUpdate(UpdateCopy);
+	}
+}
 
 void ASamplePawnManager::InitializePool()
 {

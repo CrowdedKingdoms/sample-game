@@ -7,6 +7,8 @@
 #include "Math/MathFwd.h"
 #include "CrowdyGameSession.generated.h"
 
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOwnerUUIDUpdated,FString, NewOwnerUUID);
 /**
  * 
  */
@@ -16,19 +18,19 @@ struct FGameSessionInfo
 {
 	GENERATED_BODY()
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	int64 AppID = 1;
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	FString GameToken = "";
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	int64 GameTokenID = 0;
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	int64 UserID = 0;
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	FString UUID = "";
 	
 	UPROPERTY()
@@ -40,7 +42,7 @@ struct FGameSessionInfo
 	UPROPERTY()
 	FInt32Vector LastMinigameVoxelCoordinates = {0, 0, 0};
 	
-	UPROPERTY(BlueprintReadWrite, Category="CrowdySDK|Game Session")
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	bool bWasInMinigame = false;
 	
 	void Reset()
@@ -67,6 +69,9 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 	
+	UPROPERTY(BlueprintAssignable, Category = "Crowdy SDK|Game Session")
+	FOnOwnerUUIDUpdated OnOwnerUUIDUpdated;
+	
 	[[nodiscard]] bool EnqueueMessageToSend(TArray<uint8>&& Message);
 
 	bool DequeueMessageToSend(TArray<uint8>& OutMessage);
@@ -75,56 +80,60 @@ public:
 	
 	[[nodiscard]] bool DequeueMessageToReceive(TArray<uint8>& OutMessage);
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetAppID(const int64 InAppID) {GameSessionInfo.AppID = InAppID;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetUserID(const int64 InUserID){GameSessionInfo.UserID = InUserID;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetGameToken(const FString InGameToken){GameSessionInfo.GameToken = InGameToken;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
-	void SetUUID(FString InUUID){GameSessionInfo.UUID = InUUID;}
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
+	void SetUUID(FString InUUID)
+	{
+		GameSessionInfo.UUID = InUUID;
+		OnOwnerUUIDUpdated.Broadcast(InUUID);
+	}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetGameTokenID(const int64 InGameTokenID) {GameSessionInfo.GameTokenID = InGameTokenID;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetPlayerCurrentChunkCoordinates(const int64 X, const int64 Y, const int64 Z) {GameSessionInfo.CurrentPlayerChunkCoordinates = FInt64Vector(X, Y, Z);}
 	
 	UFUNCTION()
 	FInt64Vector GetPlayerCurrentChunkCoordinates() const {return GameSessionInfo.CurrentPlayerChunkCoordinates;}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetAppID() const { return GameSessionInfo.AppID;}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	FString GetGameToken() const {return GameSessionInfo.GameToken;}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	FString GetUUID() const {return GameSessionInfo.UUID;}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetUserID() const {return GameSessionInfo.UserID;}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetGameTokenID() const {return GameSessionInfo.GameTokenID;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void ClearCurrentSessionData() {GameSessionInfo.Reset();}
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	FGameSessionInfo GetCurrentGameSessionInfo() const {return GameSessionInfo;}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetLastMinigameCoordinates(int64 ChunkX, int64 ChunkY, int64 ChunkZ, int32 VoxelX, int32 VoxelY, int32 VoxelZ)
 	{
 		GameSessionInfo.LastMinigameChunkCoordinates = {ChunkX, ChunkY, ChunkZ};
 		GameSessionInfo.LastMinigameVoxelCoordinates = {VoxelX, VoxelY, VoxelZ};
 	};
 	
-	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	void GetLastMinigameCoordinates(int64& ChunkX, int64& ChunkY, int64& ChunkZ, int32& VoxelX, int32& VoxelY, int32& VoxelZ) const
 	{
 		ChunkX = GameSessionInfo.LastMinigameChunkCoordinates.X;
@@ -135,7 +144,7 @@ public:
 		VoxelZ = GameSessionInfo.LastMinigameVoxelCoordinates.Z;
 	}
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Game Session")
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void SetWasInMinigame(const bool bWasInMinigame) {GameSessionInfo.bWasInMinigame = bWasInMinigame;}
 	
 	[[nodiscard]] bool HasPendingIncomingMessages() const; 
