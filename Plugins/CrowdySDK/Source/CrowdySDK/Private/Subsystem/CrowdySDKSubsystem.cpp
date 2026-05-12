@@ -295,11 +295,11 @@ void UCrowdySDKSubsystem::OverrideEventDataAsset(const UEventPayloadType* DataAs
 
 void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
                                               const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-                                              const FString& InstigatorUUID, FInstancedStruct ActorStatePayload, const bool bAsync) const
+                                              const FString& InstigatorUUID, UPARAM(ref) const FInstancedStruct& ActorStatePayload, const bool bAsync)
 {
 	auto BuildAndDispatch = [this, ChunkX, ChunkY, ChunkZ, DecayRate, ReplicationDistance, InstigatorUUID, 
 		
-	ActorStatePayload = MoveTemp(ActorStatePayload)]() mutable
+	ActorStatePayload = ActorStatePayload]() mutable
 	{
 		FActorUpdateRequestMessage ActorUpdateRequest;
 		ActorUpdateRequest.AppID = GameSession->GetAppID();
@@ -345,7 +345,7 @@ void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 Ch
 
 void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
                                             const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-                                            const FString& InstigatorUUID, FInstancedStruct EventPayload, const bool bAsync) const
+                                            const FString& InstigatorUUID, UPARAM(ref) FInstancedStruct& EventPayload, const bool bAsync)
 {
 	
 	auto BuildAndSend = [this,

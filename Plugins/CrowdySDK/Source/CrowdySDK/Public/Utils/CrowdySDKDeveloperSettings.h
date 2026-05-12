@@ -21,12 +21,22 @@ public:
 	virtual FName GetCategoryName() const override { return "Plugins"; }
 	virtual FName GetSectionName() const override { return "Crowdy SDK"; }
 	
-	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Generic")
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Generic")
 	int64 AppID = 1;
 	
-	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Events")
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Events")
 	TSoftObjectPtr<UEventPayloadType> EventPayloadDataAsset;
 	
-	UPROPERTY(Config, EditAnywhere, Category="CrowdySDK|Developer|Actor Updates")
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Updates")
 	TSoftObjectPtr<UActorUpdatePayloadType> ActorUpdatePayloadDataAsset;
+	
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Updates")
+	bool bUseAutoReplicator = true;
+	
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Updates", meta=(EditCondition="bUseAutoReplicator", ClampMin=10, ClampMax=20, DisplayName="Replication Interval (Hertz)"));
+	int32 ReplicationIntervalHz = 10;
+	
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Updates", meta=(EditCondition="bUseAutoReplicator"))
+	TSet<TSoftObjectPtr<UWorld>> LevelsToUseAutoReplicator;
+	
 };
