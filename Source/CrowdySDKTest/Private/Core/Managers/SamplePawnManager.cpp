@@ -29,10 +29,10 @@ void ASamplePawnManager::BeginPlay()
 		return;
 	}
 	
-	CrowdyActorTracker->OnSpawnRequested.AddDynamic(this, &ASamplePawnManager::OnActorSpawned);
-	CrowdyActorTracker->OnTimeoutRequested.AddDynamic(this, &ASamplePawnManager::OnActorDestroyed);
+	CrowdyActorTracker->OnNewPlayerJoined.AddDynamic(this, &ASamplePawnManager::OnActorSpawned);
+	CrowdyActorTracker->OnPlayerLeft.AddDynamic(this, &ASamplePawnManager::OnActorDestroyed);
 	
-	CrowdyActorTracker->OnExistingUpdateWorkerBatch.AddUObject(this, &ASamplePawnManager::OnUpdateBatch);
+	CrowdyActorTracker->OnUpdatesWorkerThread.AddUObject(this, &ASamplePawnManager::OnUpdateBatch);
 	
 	// Since we're using a pooled approach, we initialize the actor pool at begin play
 	InitializePool();

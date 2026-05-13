@@ -310,14 +310,14 @@ void UCrowdyActorTracker::ProcessQueue(int32 WorkerIndex)
             ExistingBatch.Add(*U);
 
         // C++ fast path — direct ref, no extra copy
-        OnExistingUpdateWorkerBatch.Broadcast(ExistingBatch);
+        OnUpdatesWorkerThread.Broadcast(ExistingBatch);
 
         if (bBroadcastUpdatesToGameThread)
         {
             // Move the array we just built into the capture — no extra copy
             AsyncTask(ENamedThreads::GameThread, [this, GTBatch = MoveTemp(ExistingBatch)]()
             {
-                OnExistingUpdateGameThreadBatch.Broadcast(GTBatch);
+                OnUpdatesGameThread.Broadcast(GTBatch);
             });
         }
     }
@@ -341,7 +341,7 @@ void UCrowdyActorTracker::ProcessQueue(int32 WorkerIndex)
                     for (const FCrowdyActorUpdate& Update : SpawnBatch)
                     {
                         ++NumOfTrackedActors;
-                        OnSpawnRequested.Broadcast(Update.UUID, Update.State, NumOfTrackedActors.load());
+                        OnNewPlayerJoined.Broadcast(Update.UUID, Update.State, NumOfTrackedActors.load());
                     }
                     
                     for (const FCrowdyActorUpdate& Update : SpawnBatch)
@@ -403,7 +403,7 @@ void UCrowdyActorTracker::ProcessTimedOutActors(TArray<FGuid> TimedOut)
 		[this, TimedOut = MoveTemp(TimedOut)]()
 		{
 			for (const FGuid& UUID : TimedOut)
-				OnTimeoutRequested.Broadcast(UUID, NumOfTrackedActors.load());
+				OnPlayerLeft.Broadcast(UUID, NumOfTrackedActors.load());
 		},
 		LowLevelTasks::ETaskPriority::Normal,
 		UE::Tasks::EExtendedTaskPriority::GameThreadNormalPri

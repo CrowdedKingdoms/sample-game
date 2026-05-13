@@ -58,19 +58,19 @@ public:
 public:
 	
 	//Fast Path (C++ only, worker thread)
-	FOnActorUpdateWorkerBatch OnExistingUpdateWorkerBatch;
+	FOnActorUpdateWorkerBatch OnUpdatesWorkerThread;
 
 	//BP Path (Game Thread, opt-in)
 	UPROPERTY(BlueprintAssignable, Category = "Crowdy SDK|Actor Tracker|Events")
-	FOnActorUpdateGameThreadBatch OnExistingUpdateGameThreadBatch;
+	FOnActorUpdateGameThreadBatch OnUpdatesGameThread;
 	
 	// Spawn Delegate
 	UPROPERTY(BlueprintAssignable, Category = "Crowdy SDK|Actor Tracker|Events")
-	FOnActorSpawnRequested OnSpawnRequested;
+	FOnActorSpawnRequested OnNewPlayerJoined;
 
 	// Destroy/Despawn delegate
 	UPROPERTY(BlueprintAssignable, Category = "Crowdy SDK|Actor Tracker|Events")
-	FOnActorTimeoutRequested OnTimeoutRequested;
+	FOnActorTimeoutRequested OnPlayerLeft;
 
 public:
 	
