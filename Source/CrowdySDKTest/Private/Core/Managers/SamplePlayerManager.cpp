@@ -18,7 +18,7 @@
 ASamplePlayerManager::ASamplePlayerManager()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 }
 
 // Called when the game starts or when spawned
@@ -29,42 +29,27 @@ void ASamplePlayerManager::BeginPlay()
 	// Get Reference to SDK; since it's a Game Instance Subsystem, it's available system-wide
 	CrowdySDK = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdySDKSubsystem>();
 
-	// Get Reference to Crowdy Game Session
-	CrowdyGameSession = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdyGameSession>();
-
-	// Get Reference to Worker Thread Subsystem
-	WorkerThreadsSubsystem = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdyWorkerThreadsSubsystem>();
-
+	
 	// Validation Checks
 	const bool bIsSDKValid = IsValid(CrowdySDK);
-	const bool bIsGameSessionValid = IsValid(CrowdyGameSession);
 	const bool bIsPawnManagerValid = IsValid(PawnManager);
 	
 
 	// Assertion to check if SDK reference is valid, since we cannot proceed without this
 	check(bIsSDKValid)
-	check(bIsGameSessionValid)
-
+	
 	// Return early if any system is invalid
-	if (!bIsSDKValid || !bIsGameSessionValid)
+	if (!bIsSDKValid)
 	{
-		UE_LOG(
-			LogTemp,
-			Error,
-			TEXT("%s is invalid. Returning."),
-			!bIsSDKValid ? TEXT("CrowdySDK") : TEXT("Crowdy Game Session")
-		);
+		UE_LOG(LogTemp, Error, TEXT("[SamplePlayerManager]: Invalid SDK reference."));
 		return;
 	}
 
 	if (!bIsPawnManagerValid)
 		return;
-
 	
-
 	// This registers this actor as a reception layer for messages. Without this, the SDK doesn't dispatch messages to this actor
 	CrowdySDK->RegisterReceptionLayer(this);
-	
 }
 
 void ASamplePlayerManager::EndPlay(const EEndPlayReason::Type EndPlayReason)

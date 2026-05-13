@@ -4,10 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Data/ActorUpdatePayloadType.h"
+#include "Data/CrowdyActorManagementConfig.h"
+#include "Data/CrowdyRepApplicationPolicy.h"
 #include "Data/EventPayloadType.h"
 #include "Engine/DeveloperSettings.h"
+#include "Replication/Subsystems/CrowdyActorPoolSubsystem.h"
 #include "CrowdySDKDeveloperSettings.generated.h"
 
+class UCrowdyRepApplicationPolicy;
 /**
  * 
  */
@@ -39,28 +43,6 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Updates", meta=(EditCondition="bUseAutoReplicator"))
 	TSet<TSoftObjectPtr<UWorld>> LevelsToUseAutoReplicator;
 	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker")
-	bool bUseCrowdyActorTracker = true;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker"))
-	bool bDispatchUpdatesOnGameThread = false;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker"))
-	bool bEnableOwnerTracking = true;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker"))
-	float ActorTimeoutThreshold = 5.0f;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker", ClampMin=1))
-	int32 MaxTrackedActors = 1000;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker", ClampMin=1))
-	int32 MaxUpdatesPerBatch = 100;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker", ClampMin=0.001f, ClampMax=0.1f))
-	float MaxBatchWaitTime = 0.005f;
-	
-	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Tracker", meta=(EditCondition="bUseCrowdyActorTracker"))
-	TSet<TSoftObjectPtr<UWorld>> LevelsToUseActorTracker;
-	
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Management")
+	TMap<TSoftObjectPtr<UWorld>, TSoftObjectPtr<UCrowdyActorManagementConfig>> ActorManagementConfigs;
 };
