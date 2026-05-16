@@ -5,10 +5,11 @@
 #include "Containers/Queue.h"
 #include "HAL/CriticalSection.h"
 #include "Math/MathFwd.h"
+#include "Utils/SerializationFunctionLibrary.h"
 #include "CrowdyGameSession.generated.h"
 
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOwnerUUIDUpdated,FString, NewOwnerUUID);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOwnerUUIDUpdated, FString, NewOwnerUUID);
 /**
  * 
  */
@@ -32,6 +33,9 @@ struct FGameSessionInfo
 	
 	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	FString UUID = "";
+	
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
+	FGuid ID;
 	
 	UPROPERTY()
 	FInt64Vector CurrentPlayerChunkCoordinates = {0, 0, 0};
@@ -93,6 +97,7 @@ public:
 	void SetUUID(FString InUUID)
 	{
 		GameSessionInfo.UUID = InUUID;
+		GameSessionInfo.ID = USerializationFunctionLibrary::ToGuid(InUUID);
 		OnOwnerUUIDUpdated.Broadcast(InUUID);
 	}
 	
@@ -113,6 +118,9 @@ public:
 	
 	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	FString GetUUID() const {return GameSessionInfo.UUID;}
+	
+	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
+	FGuid GetID() const {return GameSessionInfo.ID;}
 	
 	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetUserID() const {return GameSessionInfo.UserID;}

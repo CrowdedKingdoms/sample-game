@@ -17,8 +17,8 @@ void UCrowdyActorPoolSubsystem::Deinitialize()
 			if (!Slot.Actor.IsValid())
 				continue;
 
-			if (Slot.bActive && Pool.Policy)
-				Pool.Policy->OnActorDeactivated(Slot.Actor.Get());
+			if (Slot.bActive && Pool.Policy && GetWorld() && !GetWorld()->bIsTearingDown)
+ 				Pool.Policy->OnActorDeactivated(Slot.Actor.Get());
 
 			AActor* Actor = Slot.Actor.Get();
 			if (IsValid(Actor))
@@ -32,7 +32,7 @@ void UCrowdyActorPoolSubsystem::Deinitialize()
 	}
 
 	Pools.Empty();
-	UUIDToActor.Empty();
+	IDToActor.Empty();
 
 	Super::Deinitialize();
 }
@@ -92,17 +92,17 @@ void UCrowdyActorPoolSubsystem::RegisterPool(const FCrowdyPoolConfig& Config)
 	}
 }
 
-AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorClass, const FGuid& UUID,
-	const FInstancedStruct& InitialState)
+AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorClass, const FGuid& ID,
+                                                const FInstancedStruct& InitialState)
 {
 	// If UUID is already active, return the existing actor instead of double-acquiring
-	if (AActor** Existing = UUIDToActor.Find(UUID))
+	if (AActor** Existing = IDToActor.Find(ID))
 	{
 		if (IsValid(*Existing))
 			return *Existing;
 
 		// Stale entry — clean it up before reacquiring
-		UUIDToActor.Remove(UUID);
+		IDToActor.Remove(ID);
 	}
 
 	FPool* Pool = FindPool(ActorClass.Get());
@@ -113,13 +113,14 @@ AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorC
 		if (Slot.bActive || !Slot.Actor.IsValid()) continue;
 
 		Slot.bActive = true;
-		Slot.UUID    = UUID;
+		Slot.UUID    = ID;
 
 		AActor* Actor = Slot.Actor.Get();
 		if (!IsValid(Actor)) continue;  // skip stale weak ptrs
 
 		Pool->Policy->OnActorActivated(Actor, InitialState);
-		UUIDToActor.Add(UUID, Actor);
+		IDToActor.Add(ID, Actor);
+		ActorToID.Add(Actor, ID);
 		return Actor;
 	}
 
@@ -127,13 +128,14 @@ AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorC
 	return nullptr;
 }
 
-void UCrowdyActorPoolSubsystem::ReleaseActor(const FGuid& UUID)
+void UCrowdyActorPoolSubsystem::ReleaseActor(const FGuid& ID)
 {
-	AActor** ActorPtr = UUIDToActor.Find(UUID);
+	AActor** ActorPtr = IDToActor.Find(ID);
 	if (!ActorPtr) return;
 
 	AActor* Actor = *ActorPtr;
-	UUIDToActor.Remove(UUID);
+	IDToActor.Remove(ID);
+	ActorToID.Remove(Actor);
 
 	for (auto& [Class, Pool] : Pools)
 	{
@@ -148,10 +150,43 @@ void UCrowdyActorPoolSubsystem::ReleaseActor(const FGuid& UUID)
 	}
 }
 
-AActor* UCrowdyActorPoolSubsystem::FindActor(const FGuid& UUID) const
+AActor* UCrowdyActorPoolSubsystem::FindActor(const FGuid& ID, bool& bIsValid)
 {
-	AActor* const* ActorPtr = UUIDToActor.Find(UUID);
+	AActor* Actor = FindActor(ID);
+	if (!Actor)
+		bIsValid = false;
+	else
+		bIsValid = true;
+	return Actor;
+}
+
+AActor* UCrowdyActorPoolSubsystem::FindActor(const FGuid& ID)
+{
+	AActor* const* ActorPtr = IDToActor.Find(ID);
 	return ActorPtr ? *ActorPtr : nullptr;
+}
+
+FGuid UCrowdyActorPoolSubsystem::FindID(bool& bIsValid, const AActor* Actor)
+{
+	if (!IsValid(Actor))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorPool]: Actor reference is null"));
+		bIsValid = false;
+		return FGuid();
+	}
+	
+	const FGuid* IDPtr = ActorToID.Find(Actor);
+	
+	if (!IDPtr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorPool]: Actor is not tracked"));
+		bIsValid = false;
+		return FGuid();
+	}
+	
+	bIsValid = true;
+	return *IDPtr;
+	
 }
 
 UCrowdyActorPoolSubsystem::FPool* UCrowdyActorPoolSubsystem::FindPool(const UClass* ActorClass)

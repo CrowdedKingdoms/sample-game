@@ -8,6 +8,7 @@
 #include "StructUtils/InstancedStruct.h"
 #include "CrowdyActorUpdateComponent.generated.h"
 
+class UCrowdyGameSession;
 class UActorUpdateExecutor;
 class UCrowdyAutoReplicator;
 
@@ -32,11 +33,11 @@ public:
 	void StopReplication();
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Crowdy SDK|Crowdy Actor Update Component|Data")
-	FString GetUUID()
+	FGuid GetID() const
 	{
-		return UUID;
+		return ID;
 	}
-
+	
 	[[nodiscard]] FORCEINLINE const FString& GetUUID() const
 	{
 		return UUID;
@@ -54,6 +55,10 @@ public:
 		return CachedOwner;
 	}
 
+	[[nodiscard]] FORCEINLINE FString GetUUID()
+	{
+		return UUID;
+	}
 
 protected:
 	// Called when the game starts
@@ -66,8 +71,22 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Crowdy SDK|Crowdy Actor Update Component|Data")
 	bool bAutoStartReplication = true;
 	
+	UPROPERTY(EditAnywhere, Category = "Crowdy SDK|Crowdy Actor Update Component|Data", 
+		meta=(ToolTip="If Owner is a player then seed value will not be used. Seed value will only work with Non-Player actors."))
+	bool bUseDeterministicID = true;
+	
+	UPROPERTY(EditAnywhere, Category = "Crowdy SDK|Crowdy Actor Update Component|Data", 
+		meta=(ToolTip="Seed value will only be used if Owner is not a player"))
+	int64 Seed = 0;
+	
+	UPROPERTY(EditAnywhere, Instanced, Category = "Crowdy SDK|Crowdy Actor Update Component|Data")
+	TObjectPtr<UActorUpdateExecutor> ActorUpdateExecutor;
+	
 	UPROPERTY()
 	FString UUID;
+	
+	UPROPERTY()
+	FGuid ID;
 	
 	UPROPERTY()
 	mutable FInstancedStruct CachedActorState;
@@ -78,7 +97,8 @@ private:
 	UPROPERTY()
 	UCrowdyAutoReplicator* AutoReplicator;
 	
-	UPROPERTY(EditAnywhere, Instanced, Category = "Crowdy SDK|Crowdy Actor Update Component|Data")
-	TObjectPtr<UActorUpdateExecutor> ActorUpdateExecutor;
-	
+private:
+	void SetupID();
+	bool TrySetupLocalPlayerID(UCrowdyGameSession* GameSession);
+	void SetupNonPlayerID();
 };

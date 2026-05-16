@@ -165,12 +165,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Replication|Actor Updates")
 	void DispatchActorUpdate(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
 	                         const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-	                         const FString& InstigatorUUID, UPARAM(ref) const FInstancedStruct& ActorStatePayload, bool bAsync = false);
+	                         const FString& InstigatorID, UPARAM(ref) const FInstancedStruct& ActorStatePayload, bool bAsync = false);
 	
 	UFUNCTION(BlueprintCallable, Category="CrowdySDK|Replication|Events")
 	void DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
 	                       const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-	                       const FString& InstigatorUUID, UPARAM(ref) FInstancedStruct& EventPayload, bool bAsync = false);
+	                       const FGuid& InstigatorID, UPARAM(ref) FInstancedStruct& EventPayload, bool bAsync = false);
 	
 	void RegisterReceptionLayer(ICrowdyReceptionLayer* Layer) const;
 	void RegisterQueryReceptionLayer(ICrowdyQueryReceptionLayer* LayerToRegister) const;

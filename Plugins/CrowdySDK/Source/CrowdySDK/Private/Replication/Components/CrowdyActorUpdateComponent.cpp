@@ -11,7 +11,7 @@
 // Sets default values for this component's properties
 UCrowdyActorUpdateComponent::UCrowdyActorUpdateComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
+	// Set this component to be initialized when the game starts and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
 	
@@ -24,10 +24,9 @@ void UCrowdyActorUpdateComponent::BeginPlay()
 	Super::BeginPlay();
 
 	AutoReplicator = GetWorld()->GetSubsystem<UCrowdyAutoReplicator>();
-	UCrowdyGameSession* GameSession = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdyGameSession>();
+	
 	
 	check(AutoReplicator);
-	check(GameSession);
 	check(ActorUpdateExecutor)
 	
 	if (!IsValid(AutoReplicator))
@@ -36,31 +35,16 @@ void UCrowdyActorUpdateComponent::BeginPlay()
 		return;
 	}
 	
-	if (!IsValid(GameSession))
-	{
-		UE_LOG(LogTemp, Error, TEXT("[Crowdy Actor Update Component]: Invalid GameSession subsystem."));
-		 return;
-	}
-	
-	if (!IsValid(ActorUpdateExecutor))
+	if (!IsValid(ActorUpdateExecutor.Get()))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[Crowdy Actor Update Component]: Invalid ActorUpdateExecutor subsystem."));
 		 return;
 	}
-		
 	
-	// Get a new UUID and store it
-	UUID = UHelperFunctions::GetNewUUID();
+	
 	CachedOwner = GetOwner();
 	
-	if (const APawn* Pawn = Cast<APawn>(CachedOwner))
-	{
-		if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
-		{
-			if (PC->IsLocalController() && PC->IsPrimaryPlayer())
-				GameSession->SetUUID(UUID);
-		}
-	}
+	SetupID();
 	
 	if (bAutoStartReplication)
 		AutoReplicator->RegisterReplicationComponent(this);
@@ -74,6 +58,8 @@ void UCrowdyActorUpdateComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	
 	Super::EndPlay(EndPlayReason);
 }
+
+
 
 
 // Called every frame
@@ -93,3 +79,38 @@ void UCrowdyActorUpdateComponent::StopReplication()
 	AutoReplicator->UnregisterReplicationComponent(this);
 }
 
+void UCrowdyActorUpdateComponent::SetupID()
+{
+	UCrowdyGameSession* GameSession = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdyGameSession>();
+	if (!ensureMsgf(IsValid(GameSession), TEXT("[Crowdy Actor Update Component]: Invalid GameSession subsystem.")))
+	{
+		return;
+	}
+	
+	bool bIsOwnerPlayer = false;
+	
+	if (const APawn* Pawn = Cast<APawn>(CachedOwner))
+	{
+		if (const APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+		{
+			if (PC->IsLocalController() && PC->IsPrimaryPlayer())
+			{
+				bIsOwnerPlayer = true;
+				if (bUseDeterministicID)
+					UUID = UHelperFunctions::GetDeterministicID(GameSession->GetUserID()).ToString(EGuidFormats::Digits);
+				else
+					UUID = UHelperFunctions::GetNewUUID();
+				GameSession->SetUUID(UUID);
+			}
+		}
+	}
+	
+	if (!bIsOwnerPlayer && bUseDeterministicID)
+	{
+		UUID = UHelperFunctions::GetDeterministicID(Seed).ToString(EGuidFormats::Digits);
+	}
+	else if (!bIsOwnerPlayer)
+	{
+		UUID = UHelperFunctions::GetNewUUID();
+	}
+}

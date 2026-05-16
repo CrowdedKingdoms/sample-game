@@ -72,7 +72,7 @@ private:
 
 private:
 	
-	void UpdateServerTimeOffet(int64 ServerTimestampMs);
+	void UpdateServerTimeOffset(int64 ServerTimestampMs);
 	int64 GetEstimatedServerTimeMs() const;
 	
 	void ApplyPendingUpdates();

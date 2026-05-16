@@ -23,28 +23,34 @@ public:
 	
 	/**
 	 * Register a pool. Call this once at startup (GameMode::BeginPlay, etc.)
-	 * Multiple pools can exist — one per actor class.
+	 * Multiple pools can exist, one per actor class.
 	 */
 	UFUNCTION(BlueprintCallable, Category="Actor Pool")
 	void RegisterPool(const FCrowdyPoolConfig& Config);
 
 	/** Check out an actor, bind it to a UUID, call OnActorActivated. */
 	UFUNCTION(BlueprintCallable, Category="Actor Pool")
-	AActor* AcquireActor(TSubclassOf<AActor> ActorClass, const FGuid& UUID, const FInstancedStruct& InitialState);
+	AActor* AcquireActor(TSubclassOf<AActor> ActorClass, const FGuid& ID, const FInstancedStruct& InitialState);
 
 	/** Return an actor to the pool by UUID, call OnActorDeactivated. */
 	UFUNCTION(BlueprintCallable, Category="Actor Pool")
-	void ReleaseActor(const FGuid& UUID);
+	void ReleaseActor(const FGuid& ID);
 
 	/** Direct UUID→Actor lookup. Returns null if UUID not active. */
 	UFUNCTION(BlueprintCallable, Category="Actor Pool")
-	AActor* FindActor(const FGuid& UUID) const;
+	AActor* FindActor(const FGuid& ID, bool& bIsValid);
+	
+	//C++ overload
+	AActor* FindActor(const FGuid& ID);
+	
+	UFUNCTION(BlueprintCallable, Category="Actor Pool")
+	FGuid FindID(bool& bIsValid ,const AActor* Actor);
 
-	/** Convenience — find and cast. Returns null if not found or wrong type. */
+	/*Convenience, find and cast. Returns null if not found or wrong type.*/
 	template<typename T>
-	T* FindActorAs(const FGuid& UUID) const
+	T* FindActorAs(const FGuid& ID, bool& bIsValid)
 	{
-		return Cast<T>(FindActor(UUID));
+		return Cast<T>(FindActor(ID, bIsValid));
 	}
 	
 private:
@@ -67,7 +73,10 @@ private:
 	TMap<UClass*, FPool> Pools;
 	
 	UPROPERTY()
-	TMap<FGuid, AActor*> UUIDToActor;
+	TMap<FGuid, AActor*> IDToActor;
+	
+	UPROPERTY()
+	TMap<AActor*, FGuid> ActorToID;
 	
 	FPool* FindPool(const UClass* ActorClass);
 };

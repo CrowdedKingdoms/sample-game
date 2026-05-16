@@ -295,9 +295,9 @@ void UCrowdySDKSubsystem::OverrideEventDataAsset(const UEventPayloadType* DataAs
 
 void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
                                               const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-                                              const FString& InstigatorUUID, UPARAM(ref) const FInstancedStruct& ActorStatePayload, const bool bAsync)
+                                              const FString& InstigatorID, UPARAM(ref) const FInstancedStruct& ActorStatePayload, const bool bAsync)
 {
-	auto BuildAndDispatch = [this, ChunkX, ChunkY, ChunkZ, DecayRate, ReplicationDistance, InstigatorUUID, 
+	auto BuildAndDispatch = [this, ChunkX, ChunkY, ChunkZ, DecayRate, ReplicationDistance, InstigatorID, 
 		
 	ActorStatePayload = ActorStatePayload]() mutable
 	{
@@ -308,7 +308,7 @@ void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 Ch
 		ActorUpdateRequest.ChunkZ = ChunkZ;
 		ActorUpdateRequest.DecayRate = DecayRate;
 		ActorUpdateRequest.ReplicationDistance = ReplicationDistance;
-		ActorUpdateRequest.UUID = InstigatorUUID;
+		ActorUpdateRequest.UUID = InstigatorID;
 		
 		uint8 StateID;
 		
@@ -345,13 +345,13 @@ void UCrowdySDKSubsystem::DispatchActorUpdate(const int64 ChunkX, const int64 Ch
 
 void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 ChunkY, const int64 ChunkZ,
                                             const ECrowdyDecayRate DecayRate, const ECrowdyReplicationDistance ReplicationDistance,
-                                            const FString& InstigatorUUID, UPARAM(ref) FInstancedStruct& EventPayload, const bool bAsync)
+                                            const FGuid& InstigatorID, UPARAM(ref) FInstancedStruct& EventPayload, const bool bAsync)
 {
 	
 	auto BuildAndSend = [this,
 	ChunkX, ChunkY, ChunkZ,
 	DecayRate, ReplicationDistance,
-	InstigatorUUID,
+	InstigatorID,
 	
 	Payload = MoveTemp(EventPayload)]() mutable
 	{
@@ -363,7 +363,7 @@ void UCrowdySDKSubsystem::DispatchGameEvent(const int64 ChunkX, const int64 Chun
 		EventRequest.ChunkZ = ChunkZ;
 		EventRequest.DecayRate = DecayRate;
 		EventRequest.ReplicationDistance = ReplicationDistance;
-		EventRequest.UUID = InstigatorUUID;
+		EventRequest.UUID = InstigatorID.ToString(EGuidFormats::Digits);
 
 		int32 EventID;
 

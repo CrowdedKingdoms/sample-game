@@ -54,7 +54,7 @@ void ASampleObjectManager::BeginPlay()
 	Super::BeginPlay();
 
 	const UCrowdySDKSubsystem* CrowdySDK = GetWorld()->GetGameInstance()->GetSubsystem<UCrowdySDKSubsystem>();
-	CrowdySDK->RegisterReceptionLayer(this);
+	//CrowdySDK->RegisterReceptionLayer(this);
 }
 
 // Called every frame

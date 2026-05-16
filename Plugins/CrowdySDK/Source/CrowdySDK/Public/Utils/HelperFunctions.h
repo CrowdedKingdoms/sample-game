@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "StructUtils/InstancedStruct.h"
 #include "HelperFunctions.generated.h"
 
 /**
@@ -23,4 +24,14 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Identifiers")
 	static FString GetNewUUID();
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Identifiers")
+	static FGuid GetDeterministicID(const int64 Seed);
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Identifiers")
+	static FGuid GetNewID();
+	
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Utility Functions", meta=(WorldContext="WorldContextObject"))
+	static void DispatchEventForObject(UObject* WorldContextObject, const AActor* Object, FInstancedStruct EventPayload);
+	
 };

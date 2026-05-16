@@ -128,7 +128,7 @@ void UCrowdyActorManager::SetPolicy(UCrowdyRepApplicationPolicy* NewPolicy)
 	ActivePolicy = NewPolicy;
 }
 
-void UCrowdyActorManager::UpdateServerTimeOffet(const int64 ServerTimestampMs)
+void UCrowdyActorManager::UpdateServerTimeOffset(const int64 ServerTimestampMs)
 {
 	const int64 ClientNowMs = (FDateTime::UtcNow() - FDateTime(1970, 1, 1)).GetTotalMilliseconds();
 	const int64 EstimatedOffset = ServerTimestampMs - ClientNowMs;
@@ -167,7 +167,7 @@ void UCrowdyActorManager::ApplyPendingUpdates()
 	FCrowdyActorUpdate Update;
 	while (UpdateQueue.Dequeue(Update))
 	{
-		UpdateServerTimeOffet(Update.ServerTimestamp);
+		UpdateServerTimeOffset(Update.ServerTimestamp);
 		const int32* SlotPtr = UUIDToSlot.Find(Update.UUID);
 		
 		if (!SlotPtr) continue;

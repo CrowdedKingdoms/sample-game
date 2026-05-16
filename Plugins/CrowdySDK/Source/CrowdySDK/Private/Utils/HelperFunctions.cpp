@@ -3,9 +3,14 @@
 
 #include "Utils/HelperFunctions.h"
 
+#include "Replication/Components/CrowdyObjectComponent.h"
+#include "Replication/Subsystems/CrowdyObjectManager.h"
+#include "Subsystem/CrowdyGameSession.h"
+#include "Subsystem/CrowdySDKSubsystem.h"
+
 
 void UHelperFunctions::GetChunkCoordinatesAtWorldLocation(const FVector& WorldLocation, int64& ChunkX, int64& ChunkY,
-	int64& ChunkZ)
+                                                          int64& ChunkZ)
 {
 	constexpr double ChunkSize = 1600.0f;
 	
@@ -40,3 +45,37 @@ FString UHelperFunctions::GetNewUUID()
 	FString GuidStr = NewGuid.ToString(EGuidFormats::Digits);
 	return GuidStr;
 }
+
+FGuid UHelperFunctions::GetDeterministicID(const int64 Seed)
+{
+	const uint32 A = GetTypeHash(Seed);
+	const uint32 B = HashCombine(A, 0x9E3779B9);
+	const uint32 C = HashCombine(B, 0x85EBCA6B);
+	const uint32 D = HashCombine(C, 0xC2B2AE35);
+	
+	return FGuid(A, B, C, D);
+}
+
+FGuid UHelperFunctions::GetNewID()
+{
+	return FGuid::NewGuid();
+}
+
+void UHelperFunctions::DispatchEventForObject(UObject* WorldContextObject, const AActor* Object,
+                                              FInstancedStruct EventPayload)
+{
+	if (!IsValid(WorldContextObject)) return;
+	
+	if (!IsValid(Object)) return;
+
+	if (!IsValid(EventPayload.GetScriptStruct()))
+		return;
+
+	const UCrowdyObjectComponent* ObjectComponent = Cast<UCrowdyObjectComponent>(Object->GetComponentByClass(UCrowdyObjectComponent::StaticClass()));
+	
+	if (!IsValid(ObjectComponent))
+		return;
+	
+	ObjectComponent->DispatchEventForObject(EventPayload);
+}
+
