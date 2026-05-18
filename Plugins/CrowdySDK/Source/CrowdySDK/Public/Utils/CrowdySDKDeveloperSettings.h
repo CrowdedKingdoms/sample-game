@@ -10,6 +10,7 @@
 #include "Data/FCrowdyObjectManagerConfig.h"
 #include "Engine/DeveloperSettings.h"
 #include "Replication/Subsystems/CrowdyActorPoolSubsystem.h"
+#include "Data/CrowdyObjectRegistry.h"
 #include "CrowdySDKDeveloperSettings.generated.h"
 
 class UCrowdyRepApplicationPolicy;
@@ -47,12 +48,8 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Actor Management")
 	TMap<TSoftObjectPtr<UWorld>, TSoftObjectPtr<UCrowdyActorManagementConfig>> ActorManagementConfigs;
 	
-	UPROPERTY(EditAnywhere, Category="Crowdy SDK|Developer|Object Management")
-	TMap<TSoftObjectPtr<UWorld>, FCrowdyObjectManagerConfig> ObjectManagerConfigs;
-	
-#if WITH_EDITOR
-	void ValidateObjectHandlerBindings();
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
+	UPROPERTY(Config, EditAnywhere, Category="Crowdy SDK|Developer|Object Management")
+	TMap<TSoftObjectPtr<UWorld>, TSoftObjectPtr<UCrowdyObjectRegistry>> ObjectRegistryDataAssetMap;
+
 	
 };

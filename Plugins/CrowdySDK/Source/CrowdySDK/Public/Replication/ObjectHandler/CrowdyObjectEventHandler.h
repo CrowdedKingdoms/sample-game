@@ -18,34 +18,31 @@ class CROWDYSDK_API UCrowdyObjectEventHandler : public UObject
 public:
 	
 	/**
-	 * Return the struct type this handler responds to.
-	 * Subsystem uses this to route events to the right handler.
+	 * Called after an actor is spawned and registered.
+	 * Apply the initial visual state here — materials, mesh, etc.
 	 */
 	UFUNCTION(BlueprintNativeEvent, Category="Crowdy Object")
-	TArray<UScriptStruct*> GetHandledStructTypes() const;
-	virtual TArray<UScriptStruct*> GetHandledStructTypes_Implementation() const { return {}; }
+	void OnObjectSpawned(AActor* Actor, const FInstancedStruct& InitialState, bool bIsLocallyOwned);
+	virtual void OnObjectSpawned_Implementation(AActor* Actor, const FInstancedStruct& InitialState, bool bIsLocallyOwned) {}
 
 	/**
-	 * Called when a new object with this payload type is registered.
-	 * Use this to spawn your visual representation.
+	 * Apply a state change to an existing object.
+	 * Could be health, color, animation state — anything.
 	 */
 	UFUNCTION(BlueprintNativeEvent, Category="Crowdy Object")
-	void OnObjectRegistered(const FGuid& UUID, const FGuid& OwnerID, const FInstancedStruct& Payload, AActor* Actor, bool bIsLocallyOwned);
-	virtual void OnObjectRegistered_Implementation(const FGuid& UUID, const FGuid& OwnerID, const FInstancedStruct& Payload, AActor* Actor, bool bIsLocallyOwned) {}
+	void OnObjectStateChanged(AActor* Actor, const FInstancedStruct& NewState);
+	virtual void OnObjectStateChanged_Implementation(AActor* Actor, const FInstancedStruct& NewState) {}
 
 	/**
-	 * Called when an object event is dispatched for this payload type.
-	 * Fully user-defined — could be health change, color change, state change, etc.
+	 * Called before the actor is destroyed.
+	 * Play dissolve, spawn loot, etc.
+	 * Return the delay in seconds before actual destroy — 0 for immediate.
 	 */
+	UFUNCTION(BlueprintNativeEvent, Category="Crowdy Object")
+	float OnObjectDestroyed(AActor* Actor, bool bIsLocallyOwned);
+	virtual float OnObjectDestroyed_Implementation(AActor* Actor, bool bIsLocallyOwned) { return 0.f; }
+	
 	UFUNCTION(BlueprintNativeEvent, Category="Crowdy Object")
 	void OnObjectEvent(const FGuid& InstigatorID, const FInstancedStruct& EventPayload);
 	virtual void OnObjectEvent_Implementation(const FGuid& InstigatorID, const FInstancedStruct& EventPayload) {}
-
-	/**
-	 * Called when the object is unregistered.
-	 * Use this to destroy your visual representation.
-	 */
-	UFUNCTION(BlueprintNativeEvent, Category="Crowdy Object")
-	void OnObjectUnregistered(const FGuid& UUID);
-	virtual void OnObjectUnregistered_Implementation(const FGuid& UUID) {}
 };

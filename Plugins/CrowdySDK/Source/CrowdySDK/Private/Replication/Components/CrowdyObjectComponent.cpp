@@ -45,7 +45,7 @@ void UCrowdyObjectComponent::BeginPlay()
 	
 	OwnerID = GameSession->GetID();
 	
-	CrowdyObjectManager->RegisterObject(ObjectID, OwnerID, ObjectPayload, GetOwner());
+	//CrowdyObjectManager->RegisterObject(ObjectID, OwnerID, ObjectPayload, GetOwner());
 }
 
 
@@ -89,7 +89,7 @@ void UCrowdyObjectComponent::DispatchEventForObject(FInstancedStruct& Event) con
 
 void UCrowdyObjectComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	CrowdyObjectManager->UnregisterObject(ObjectID);
+	//CrowdyObjectManager->UnregisterObject(ObjectID);
 	Super::EndPlay(EndPlayReason);
 }
 

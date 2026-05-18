@@ -9,7 +9,7 @@ void UEventPayloadRegistry::LoadFromDataAsset(const UEventPayloadType* DataAsset
 
 	if (!DataAsset) return;
 
-	for (const FEventPayloadTypeEntry& Entry : DataAsset->Entries)
+	for (const FEventPayloadTypeEntry& Entry : DataAsset->GetAllEntries())
 	{
 		if (!Entry.EventType)
 		{

@@ -2,7 +2,11 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+#include "Messages/GameObjects/FCrowdyObjectSpawnEvent.h"
 #include "Utils/UActorUpdatePayloadRegistry.h"
+#include "Misc/Guid.h"
+#include "Serialization/MemoryWriter.h"
+#include "Serialization/Archive.h"
 #include "Utils/UEventPayloadRegistry.h"
 
 FString USerializationFunctionLibrary::DeserializeString(const TArray<uint8>& Payload, int32 Offset, int32 Length)
@@ -313,10 +317,71 @@ bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& 
 	
 	Writer << TypeID;
 	
-	StructType->SerializeBin(Writer, const_cast<void*>(StructMemory));
-	
-	//UE_LOG(LogTemp, Log, TEXT("[SerializeEventState] '%s' -> TypeID=%d, Size=%d bytes"),
-	//	*StructType->GetName(), TypeID, OutBytes.Num());
+	switch (TypeID)
+	{
+	case 47:
+		{
+			const FCrowdyObjectSpawnEvent* Event = static_cast<const FCrowdyObjectSpawnEvent*>(StructMemory);
+			FGuid ObjectID = Event->ObjectID;
+			FGuid OwnerID = Event->OwnerID;
+			int32 ObjectTypeID = Event->TypeID;
+			FTransform SpawnTransform = Event->SpawnTransform;
+			
+			Writer << ObjectID;
+			Writer << OwnerID;
+			Writer << ObjectTypeID;
+			Writer << SpawnTransform;
+			
+			const UScriptStruct* StructType_Internal = Event->InitialState.GetScriptStruct();
+			const void* StructMemory_Internal = Event->InitialState.GetMemory();
+			
+			int32 TypeID_Internal;
+			
+			if (!UEventPayloadRegistry::Get()->GetID(StructType_Internal, TypeID_Internal))
+			{
+				UE_LOG(LogTemp, Error, TEXT("[SerializeEventState]: Failed to get ID for script struct"));
+				return false;
+			}
+			
+			Writer << TypeID_Internal;
+			
+			StructType_Internal->SerializeBin(Writer, const_cast<void*>(StructMemory_Internal));
+			return true;
+		}
+	case 48:
+		{
+			const FCrowdyObjectStateEvent* Event = static_cast<const FCrowdyObjectStateEvent*>(StructMemory);
+			
+			FGuid ObjectID = Event->ObjectID;
+			
+			const UScriptStruct* StructType_Internal = Event->NewState.GetScriptStruct();
+			const void* StructMemory_Internal = Event->NewState.GetMemory();
+			
+			int32 TypeID_Internal;
+			
+			if (!UEventPayloadRegistry::Get()->GetID(StructType_Internal, TypeID_Internal))
+			{
+				UE_LOG(LogTemp, Error, TEXT("[SerializeEventState]: Failed to get ID for script struct"));
+				return false;
+			}
+			
+			Writer << ObjectID;
+			Writer << TypeID_Internal;
+			
+			StructType_Internal->SerializeBin(Writer, const_cast<void*>(StructMemory_Internal));
+			return true;	
+		}
+	case 49:
+		{
+			const FCrowdyObjectDestroyEvent* Event = static_cast<const FCrowdyObjectDestroyEvent*>(StructMemory);
+			FGuid ObjectID = Event->ObjectID;
+			Writer << ObjectID;
+			return true;
+		}
+	default:
+		StructType->SerializeBin(Writer, const_cast<void*>(StructMemory));
+		break;
+	}
 	
 	return true;
 	
@@ -325,33 +390,90 @@ bool USerializationFunctionLibrary::SerializeEventState(const FInstancedStruct& 
 bool USerializationFunctionLibrary::DeserializeEventState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload)
 {
 	if (Payload.Num() < sizeof(int32))
-	{
-		//UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Payload too small"));
-		return false;
-	}
-	
-	FMemoryReader Reader(Payload, true);
-	
-	int32 TypeID;
-	Reader << TypeID;
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Payload too small"));
+        return false;
+    }
 
-	const UScriptStruct* StructType = UEventPayloadRegistry::Get()->Resolve(TypeID);
-	
-	if (!StructType)
-	{
-		//UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Failed to resolve script struct for TypeID=%d"), TypeID);
-		return false;
-	}
-	
-	OutPayload.InitializeAs(StructType);
-	StructType->SerializeBin(Reader, OutPayload.GetMutableMemory());
-	
-	//UE_LOG(LogTemp, Log, TEXT("[DeserializeEventState] TypeID=%d -> '%s'"), TypeID, *StructType->GetName());
+    FMemoryReader Reader(Payload, true);
 
-	return true;
+    int32 TypeID;
+    Reader << TypeID;
+
+    const UScriptStruct* StructType = UEventPayloadRegistry::Get()->Resolve(TypeID);
+    if (!StructType)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Failed to resolve TypeID=%d"), TypeID);
+        return false;
+    }
+
+    // Initialize OutPayload first — all deserialization targets its memory
+    OutPayload.InitializeAs(StructType);
+    void* StructMemory = OutPayload.GetMutableMemory();
+
+    switch (TypeID)
+    {
+        case 47: /// Create Crowdy Object
+        {
+            auto* Event = static_cast<FCrowdyObjectSpawnEvent*>(StructMemory);
+            Reader << Event->ObjectID;
+            Reader << Event->OwnerID;
+            Reader << Event->TypeID;
+        	Reader << Event->SpawnTransform;
+
+            int32 InnerTypeID;
+            Reader << InnerTypeID;
+
+            const UScriptStruct* InnerType = UEventPayloadRegistry::Get()->Resolve(InnerTypeID);
+            if (!InnerType)
+            {
+                UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Failed to resolve inner TypeID=%d"), InnerTypeID);
+                return false;
+            }
+
+            // Use InitialState's own buffer
+            Event->InitialState.InitializeAs(InnerType);
+            InnerType->SerializeBin(Reader, Event->InitialState.GetMutableMemory());
+            return true;
+        }
+
+        case 48: // Mutate State Event
+        {
+            auto* Event = static_cast<FCrowdyObjectStateEvent*>(StructMemory);
+            Reader << Event->ObjectID;
+
+            int32 InnerTypeID;
+            Reader << InnerTypeID;
+
+            const UScriptStruct* InnerType = UEventPayloadRegistry::Get()->Resolve(InnerTypeID);
+            if (!InnerType)
+            {
+                UE_LOG(LogTemp, Error, TEXT("[DeserializeEventState]: Failed to resolve inner TypeID=%d"), InnerTypeID);
+                return false;
+            }
+
+            // Use NewState's own buffer
+            Event->NewState.InitializeAs(InnerType);
+            InnerType->SerializeBin(Reader, Event->NewState.GetMutableMemory());
+            return true;
+        }
+
+        case 49: // Delete Crowdy Object
+        {
+            auto* Event = static_cast<FCrowdyObjectDestroyEvent*>(StructMemory);
+            Reader << Event->ObjectID;
+            return true;
+        }
+
+        default:
+        {
+            StructType->SerializeBin(Reader, StructMemory);
+            return true;
+        }
+    }
 }
 
-#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
+
 void USerializationFunctionLibrary::LogStructContent(const FInstancedStruct& Payload)
 {
 	const UScriptStruct* StructType = Payload.GetScriptStruct();
@@ -376,4 +498,3 @@ void USerializationFunctionLibrary::LogStructContent(const FInstancedStruct& Pay
 		UE_LOG(LogTemp, Log, TEXT("  %s = %s"), *Prop->GetName(), *ValueStr);
 	}
 }
-#endif

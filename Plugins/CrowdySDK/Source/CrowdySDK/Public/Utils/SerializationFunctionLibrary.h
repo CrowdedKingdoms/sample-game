@@ -163,9 +163,9 @@ public:
 	static bool SerializeEventState(const FInstancedStruct& Payload, TArray<uint8>& OutBytes);
 	static bool DeserializeEventState(const TArray<uint8>& Payload, FInstancedStruct& OutPayload);
 	
-#if WITH_EDITOR || UE_BUILD_DEVELOPMENT
+
 	static void LogStructContent(const FInstancedStruct& Payload);
-#endif
+
 };
 
 template <typename T>

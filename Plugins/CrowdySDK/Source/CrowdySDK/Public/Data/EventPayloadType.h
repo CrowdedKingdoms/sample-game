@@ -34,12 +34,23 @@ class CROWDYSDK_API UEventPayloadType : public UDataAsset
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowdy SDK|Event Payload Type")
 	TArray<FEventPayloadTypeEntry> Entries;
-
+	
+	TArray<FEventPayloadTypeEntry> GetAllEntries() const;
+	
+	UEventPayloadType();
+	
 #if WITH_EDITOR
 	
+	virtual void PostLoad() override;	
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 
 #endif
+private:
 	
+	UPROPERTY(VisibleAnywhere, Category="Crowdy SDK|Event Payload Type|Internal")
+	TArray<FEventPayloadTypeEntry> InternalEntries;
+	
+	void BuildInternalEntries();
+	void SanitizeCustomEntries();
 };
