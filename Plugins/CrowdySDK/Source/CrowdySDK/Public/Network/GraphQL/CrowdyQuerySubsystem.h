@@ -124,4 +124,8 @@ private:
 	void ExecuteQuery(EGraphQLQuery QueryID, const FString& Query, const bool bIncludeAuthToken, const TSharedPtr<FJsonObject>& Variables);
 	void OnHttpsRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful, EGraphQLQuery QueryID);
 	void ParseAndDispatchToServices(const FString& ResponseContent, EGraphQLQuery QueryID) const;
+
+	/** Creates an invalid response for QueryID and dispatches it through DataRegistry
+	 *  so that the correct per-query failure delegate fires on the game thread. */
+	void DispatchFailedResponse(EGraphQLQuery QueryID, const FString& ErrorMsg) const;
 };

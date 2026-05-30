@@ -771,6 +771,11 @@ void UCrowdySDKSubsystem::OnResponseReceived(TSharedPtr<ICrowdyQueryResponse> Re
 					OnTeleportPermission.Broadcast(false);
 					break;
 				}
+			case EQueryResponseType::VersionInfo:
+				{
+					OnVersionInfo.Broadcast(FGameVersion(), FGameVersion());
+					break;
+				}
 			default:
 				break;
 			}

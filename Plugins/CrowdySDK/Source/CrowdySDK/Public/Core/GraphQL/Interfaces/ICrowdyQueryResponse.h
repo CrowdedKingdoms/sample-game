@@ -23,8 +23,15 @@ public:
 	{
 		return bIsValid;
 	}
-	
+
+	/** Mark this response as failed. Safe to call from any thread before dispatch. */
+	void MarkInvalid(const FString& Error)
+	{
+		ErrorMessage = Error;
+		bIsValid = false;
+	}
+
 protected:
-	
+
 	bool bIsValid = true;
 };

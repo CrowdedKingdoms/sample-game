@@ -341,6 +341,8 @@ void UCrowdyQuerySubsystem::OnHttpsRequestComplete(FHttpRequestPtr Request, FHtt
 		{
 			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: HTTP request failed for query %d"),
 				static_cast<int32>(QueryID));
+			const FString ErrMsg = TEXT("HTTP request failed");
+			WeakThis->DispatchFailedResponse(QueryID, ErrMsg);
 			AsyncTask(ENamedThreads::GameThread, [WeakThis]()
 			{
 				WeakThis->OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"HTTP request failed\"}"));
@@ -358,6 +360,8 @@ void UCrowdyQuerySubsystem::OnHttpsRequestComplete(FHttpRequestPtr Request, FHtt
 		{
 			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Server returned %d for query %d"),
 				ResponseCode, static_cast<int32>(QueryID));
+			const FString ErrMsg = FString::Printf(TEXT("Server returned HTTP %d"), ResponseCode);
+			WeakThis->DispatchFailedResponse(QueryID, ErrMsg);
 			AsyncTask(ENamedThreads::GameThread, [WeakThis, ResponseContent]()
 			{
 				WeakThis->OnComplete.ExecuteIfBound(false, ResponseContent);
@@ -453,5 +457,19 @@ void UCrowdyQuerySubsystem::ParseAndDispatchToServices(const FString& ResponseCo
 
 	// 5. Success path
 	Response->ParseResponse(ParsedData);
+	DataRegistry->DispatchResponse(Response);
+}
+
+void UCrowdyQuerySubsystem::DispatchFailedResponse(EGraphQLQuery QueryID, const FString& ErrorMsg) const
+{
+	if (!DataRegistry)
+		return;
+
+	const EQueryResponseType ResponseType = FCrowdyQueryDescriptors::GetResponseType(QueryID);
+	TSharedPtr<ICrowdyQueryResponse> Response = FCrowdyResponseFactory::Get().Create(ResponseType);
+	if (!Response.IsValid())
+		return;
+
+	Response->MarkInvalid(ErrorMsg);
 	DataRegistry->DispatchResponse(Response);
 }
