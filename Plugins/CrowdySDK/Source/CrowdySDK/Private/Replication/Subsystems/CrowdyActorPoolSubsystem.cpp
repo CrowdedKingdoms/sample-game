@@ -95,13 +95,13 @@ void UCrowdyActorPoolSubsystem::RegisterPool(const FCrowdyPoolConfig& Config)
 AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorClass, const FGuid& ID,
                                                 const FInstancedStruct& InitialState)
 {
-	// If UUID is already active, return the existing actor instead of double-acquiring
-	if (AActor** Existing = IDToActor.Find(ID))
+	// AcquireActor — double-acquire guard
+	if (TWeakObjectPtr<AActor>* Existing = IDToActor.Find(ID))
 	{
-		if (IsValid(*Existing))
-			return *Existing;
+		if (AActor* Actor = Existing->Get())
+			return Actor;  // still alive, return it
 
-		// Stale entry — clean it up before reacquiring
+		// Stale weak ptr — GC'd actor, clean up and reacquire
 		IDToActor.Remove(ID);
 	}
 
@@ -117,8 +117,10 @@ AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorC
 
 		AActor* Actor = Slot.Actor.Get();
 		if (!IsValid(Actor)) continue;  // skip stale weak ptrs
-
-		Pool->Policy->OnActorActivated(Actor, InitialState);
+		
+		if (Pool->Policy && IsValid(Pool->Policy))
+			Pool->Policy->OnActorActivated(Actor, InitialState);
+		
 		IDToActor.Add(ID, Actor);
 		ActorToID.Add(Actor, ID);
 		return Actor;
@@ -130,11 +132,16 @@ AActor* UCrowdyActorPoolSubsystem::AcquireActor(const TSubclassOf<AActor> ActorC
 
 void UCrowdyActorPoolSubsystem::ReleaseActor(const FGuid& ID)
 {
-	AActor** ActorPtr = IDToActor.Find(ID);
-	if (!ActorPtr) return;
+	check(IsInGameThread());
 
-	AActor* Actor = *ActorPtr;
+	TWeakObjectPtr<AActor>* WeakPtr = IDToActor.Find(ID);
+	if (!WeakPtr) return;
+
+	AActor* Actor = WeakPtr->Get();
 	IDToActor.Remove(ID);
+
+	if (!Actor) return;  // GC'd — no valid key to remove from ActorToID
+
 	ActorToID.Remove(Actor);
 
 	for (auto& [Class, Pool] : Pools)
@@ -142,9 +149,13 @@ void UCrowdyActorPoolSubsystem::ReleaseActor(const FGuid& ID)
 		for (FSlot& Slot : Pool.Slots)
 		{
 			if (Slot.Actor.Get() != Actor) continue;
+
 			Slot.bActive = false;
 			Slot.UUID    = FGuid{};
-			Pool.Policy->OnActorDeactivated(Actor);
+
+			if (Pool.Policy && IsValid(Pool.Policy))
+				Pool.Policy->OnActorDeactivated(Actor);  // safe — GT, valid actor
+
 			return;
 		}
 	}
@@ -162,16 +173,22 @@ AActor* UCrowdyActorPoolSubsystem::FindActor(const FGuid& ID, bool& bIsValid)
 
 AActor* UCrowdyActorPoolSubsystem::FindActor(const FGuid& ID)
 {
-	AActor* const* ActorPtr = IDToActor.Find(ID);
-	return ActorPtr ? *ActorPtr : nullptr;
+	TWeakObjectPtr<AActor>* WeakPtr = IDToActor.Find(ID);
+	return WeakPtr ? WeakPtr->Get() : nullptr;  // returns nullptr if GC'd
 }
 
-FGuid UCrowdyActorPoolSubsystem::FindID(bool& bIsValid, const AActor* Actor)
+FGuid UCrowdyActorPoolSubsystem::FindActorID(bool& bIsValid, const AActor* Actor)
+{
+	const FGuid FoundID  = FindActorID(Actor);
+	bIsValid = FoundID.IsValid();
+	return FoundID;
+}
+
+FGuid UCrowdyActorPoolSubsystem::FindActorID(const AActor* Actor)
 {
 	if (!IsValid(Actor))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorPool]: Actor reference is null"));
-		bIsValid = false;
 		return FGuid();
 	}
 	
@@ -179,17 +196,14 @@ FGuid UCrowdyActorPoolSubsystem::FindID(bool& bIsValid, const AActor* Actor)
 	
 	if (!IDPtr)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorPool]: Actor is not tracked"));
-		bIsValid = false;
+		//UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorPool]: Actor is not tracked"));
 		return FGuid();
 	}
 	
-	bIsValid = true;
 	return *IDPtr;
-	
 }
 
-UCrowdyActorPoolSubsystem::FPool* UCrowdyActorPoolSubsystem::FindPool(const UClass* ActorClass)
+FPool* UCrowdyActorPoolSubsystem::FindPool(const UClass* ActorClass)
 {
-	return Pools.Find(ActorClass);
+	return Pools.Find(TSubclassOf<AActor>(const_cast<UClass*>(ActorClass)));
 }

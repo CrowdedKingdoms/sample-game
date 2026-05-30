@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Core/FCrowdyTypeID.h"
 #include "Data/EventPayloadType.h"
 #include "UEventPayloadRegistry.generated.h"
 
@@ -30,9 +31,9 @@ public:
 	}
 	
 	void LoadFromDataAsset(const UEventPayloadType* DataAsset);
-	bool GetID(const UScriptStruct* Struct, int32& OutID) const;
-	bool GetName(const int32 ID, FName& OutName) const;
-	UScriptStruct* Resolve(const int32 ID) const;
+	bool GetID(const UScriptStruct* Struct, FCrowdyTypeID& OutID) const;
+	bool GetName(const FCrowdyTypeID ID, FName& OutName) const;
+	UScriptStruct* Resolve(const FCrowdyTypeID ID) const;
 	
 	bool IsLoaded() const { return bLoaded.load(std::memory_order_acquire); }
 	
@@ -40,22 +41,37 @@ public:
 	{
 		ensure(IsInGameThread());
 		IDToStruct.Reset();
-		StructToID.Reset();
+		StructPathToID.Reset();
 		IDToName.Reset();
 		bLoaded.store(false, std::memory_order_release);
 	}
-
-private:
-	UPROPERTY()
-	TMap<int32, TObjectPtr<UScriptStruct>> IDToStruct;
-
-	UPROPERTY()
-	TMap<const UScriptStruct*, int32> StructToID;
 	
-	TMap<int32, FName> IDToName;
+	// Auto-registration path — called by UCrowdyAutoRegistry.
+	// Safe to call multiple times; duplicates are silently ignored.
+	void RegisterStruct(UScriptStruct* Struct, FCrowdyTypeID TypeID);
+	
+	// Called after all structs are registered.
+	// Switches the registry to read-only mode.
+	// Worker threads may read after this point — no lock needed.
+	void Seal();
+
+	bool IsSealed() const
+	{
+		return bSealed.load(std::memory_order_acquire);
+	}
+	
+	void GetAllRegisteredNames(TArray<const UScriptStruct*> RegisteredEvents ,TArray<FName>& OutNames) const;
+	
+private:
+	
+	TMap<FCrowdyTypeID, TObjectPtr<UScriptStruct>> IDToStruct;
+	
+	TMap<FName, FCrowdyTypeID> StructPathToID;
+	
+	TMap<FCrowdyTypeID, FName> IDToName;
 	
 	std::atomic<bool> bLoaded { false };
 	static std::atomic<UEventPayloadRegistry*> Instance;
-	
+	std::atomic<bool> bSealed { false };
 };
 

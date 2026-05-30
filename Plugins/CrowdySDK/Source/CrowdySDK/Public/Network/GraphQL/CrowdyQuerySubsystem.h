@@ -9,11 +9,11 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Dom/JsonObject.h"
 #include "TimerManager.h"
+#include "Core/GraphQL/Enums/EGraphQLQuery.h"
 #include "CrowdyQuerySubsystem.generated.h"
 
 class FCrowdyDataRegistry;
 class FCrowdyQueryParser;
-enum class EGraphQLQuery : uint8;
 class UGraphQLQueryDatabase;
 
 
@@ -79,8 +79,17 @@ public:
 	[[nodiscard]] bool HasAuthToken() const;
 	
 	void ExecuteQueryByID(const EGraphQLQuery QueryID, const TMap<FString, FString>& RuntimeVariables, const bool bIncludeAuthToken = true, const bool bUseNestedJson = false);
+
+	/**
+	 * Like ExecuteQueryByID but uses InlineBody directly instead of looking up
+	 * the data asset.  Used for SDK-internal requests with embedded query bodies.
+	 */
+	void ExecuteQueryWithBody(EGraphQLQuery QueryID, const FString& InlineBody,
+	                          const TMap<FString, FString>& RuntimeVariables,
+	                          bool bIncludeAuthToken = true);
 	
-	void SetEndpoint(const FString& InEndpoint);
+	void SetManagementEndpoint(const FString& InEndpoint);
+	void SetGameEndpoint(const FString& InEndpoint);
 	
 	
 	UFUNCTION(BlueprintCallable, Category = "Crowdy Query Subsystem")
@@ -95,10 +104,10 @@ private:
 	FString AuthToken;
 	
 	UPROPERTY()
-	bool bIsDevelopment;
+	FString ManagementEndpoint;
 	
 	UPROPERTY()
-	FString GraphQLEndpoint;
+	FString GameEndpoint;
 	
 	UPROPERTY()
 	FTimerHandle StatsTimerHandle;
@@ -112,10 +121,7 @@ private:
 	UFUNCTION()
 	void UpdateStats();
 	
-	UFUNCTION()
-	FString GetCurrentEndpoint() const;
-	
-	void ExecuteQuery(const FString& Query, const bool bIncludeAuthToken, const TSharedPtr<FJsonObject>& Variables);
-	void OnHttpsRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
-	void ParseAndDispatchToServices(const FString& ResponseContent) const;
+	void ExecuteQuery(EGraphQLQuery QueryID, const FString& Query, const bool bIncludeAuthToken, const TSharedPtr<FJsonObject>& Variables);
+	void OnHttpsRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful, EGraphQLQuery QueryID);
+	void ParseAndDispatchToServices(const FString& ResponseContent, EGraphQLQuery QueryID) const;
 };

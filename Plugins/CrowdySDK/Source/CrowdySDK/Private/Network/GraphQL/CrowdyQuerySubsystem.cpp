@@ -1,5 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Network/GraphQL/CrowdyQuerySubsystem.h"
 #include "HttpModule.h"
@@ -7,16 +6,8 @@
 #include "Core/GraphQL/Enums/EQueryResponseType.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Internal/FCrowdyDataRegistry.h"
-#include "Queries/Data/Version/FVersionInfoResponse.h"
-#include "Queries/Authentication/FLoginResponse.h"
-#include "Queries/Authentication/FRegisterResponse.h"
-#include "Queries/Data/Chunks/FGetChunkResponse.h"
-#include "Queries/Data/Chunks/FUpdateChunkResponse.h"
-#include "Queries/Data/User/FGetUserStateResponse.h"
-#include "Queries/Data/User/FUpdateUserStateResponse.h"
-#include "Queries/Data/Voxels/FVoxelListByDistanceResponse.h"
-#include "Queries/Data/Voxels/FVoxelListResponse.h"
-#include "Queries/Permissions/FTeleportResponse.h"
+#include "Network/GraphQL/FCrowdyQueryDescriptor.h"
+#include "Network/GraphQL/FCrowdyResponseFactory.h"
 #include "Queries/UDP/FUDPAddressNotify.h"
 #include "Serialization/FCrowdyQueryParser.h"
 #include "Serialization/JsonWriter.h"
@@ -24,11 +15,8 @@
 #include "Tasks/Task.h"
 #include "Async/Async.h"
 #include "Engine/World.h"
-#include "Queries/Data/Avatar/FAvatarCreateResponse.h"
-#include "Queries/Data/Avatar/FAvatarDeleteResponse.h"
-#include "Queries/Data/Avatar/FAvatarNameUpdateResponse.h"
-#include "Queries/Data/Avatar/FAvatarStateUpdateResponse.h"
-#include "Queries/Data/Avatar/FFetchAvatarsResponse.h"
+
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
 
 void UCrowdyQuerySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -47,24 +35,24 @@ void UCrowdyQuerySubsystem::Deinitialize()
 void UCrowdyQuerySubsystem::InitializeQuerySubsystem(FCrowdyDataRegistry* InDataRegistry)
 {
 	DataRegistry = InDataRegistry;
-	bIsDevelopment = true;
 
 	QueryDatabase = LoadObject<UGraphQLQueryDatabase>(nullptr, TEXT("/CrowdySDK/Data/DA_CrowdyQueries.DA_CrowdyQueries"));
-
 	ensure(QueryDatabase);
-	
+
 	if (!QueryDatabase)
 	{
 		UE_LOG(LogTemp, Fatal, TEXT("[CrowdySDK] Failed to load GraphQL query database"));
 	}
 
 	QueryParser = new FCrowdyQueryParser();
-	
+
 	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: Query Subsystem Initialized."))
-	
+
 	GetWorld()->GetTimerManager().SetTimer(
 		StatsTimerHandle, this, &UCrowdyQuerySubsystem::UpdateStats, 1.0f, true);
 }
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 void UCrowdyQuerySubsystem::SetAuthToken(const FString& InAuthToken)
 {
@@ -81,9 +69,47 @@ bool UCrowdyQuerySubsystem::HasAuthToken() const
 	return !AuthToken.IsEmpty();
 }
 
+// ─── Endpoint configuration ───────────────────────────────────────────────────
+
+void UCrowdyQuerySubsystem::SetManagementEndpoint(const FString& InEndpoint)
+{
+	ManagementEndpoint = InEndpoint;
+	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: Management Endpoint set to %s"), *InEndpoint);
+}
+
+void UCrowdyQuerySubsystem::SetGameEndpoint(const FString& InEndpoint)
+{
+	GameEndpoint = InEndpoint;
+	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: Game Endpoint set to %s"), *InEndpoint);
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+FQueryStats UCrowdyQuerySubsystem::GetQueryStats() const
+{
+	FQueryStats Stats;
+	Stats.bIsReceivingData               = bIsReceivingData.load();
+	Stats.QueriesSentPerSecond           = QueriesSentPerSecond.load();
+	Stats.QueryBytesSentPerSecond        = QueryBytesSentPerSecond.load();
+	Stats.ResponseBytesReceivedPerSecond = ResponseBytesReceivedPerSecond.load();
+	Stats.ResponseReceivedPerSecond      = ResponseReceivedPerSecond.load();
+	return Stats;
+}
+
+void UCrowdyQuerySubsystem::UpdateStats()
+{
+	QueriesSentPerSecond.store(0, std::memory_order_relaxed);
+	QueryBytesSentPerSecond.store(0, std::memory_order_relaxed);
+	ResponseBytesReceivedPerSecond.store(0, std::memory_order_relaxed);
+	ResponseReceivedPerSecond.store(0, std::memory_order_relaxed);
+	bIsReceivingData.store(false);
+}
+
+// ─── Query execution ──────────────────────────────────────────────────────────
+
 void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
-                                             const TMap<FString, FString>& RuntimeVariables,
-                                             const bool bIncludeAuthToken, const bool bUseNestedJson)
+                                              const TMap<FString, FString>& RuntimeVariables,
+                                              const bool bIncludeAuthToken, const bool bUseNestedJson)
 {
 	UE::Tasks::Launch(UE_SOURCE_LOCATION, [this, QueryID, RuntimeVariables, bIncludeAuthToken, bUseNestedJson]()
 	{
@@ -99,8 +125,8 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 		FGraphQLQueryDef QueryDef;
 		if (!QueryDatabase->GetQueryByID(QueryID, QueryDef))
 		{
-			UE_LOG(LogTemp, Error, TEXT("GraphQL Service: Query not found for ID %d"),
-			       static_cast<int32>(QueryID));
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Query not found for ID %d"),
+				static_cast<int32>(QueryID));
 			UE::Tasks::Launch(UE_SOURCE_LOCATION, [this]()
 			{
 				OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"Query not found\"}"));
@@ -108,10 +134,9 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 			return;
 		}
 
-		// Merge variables
+		// Merge default variables from the data asset with caller-supplied runtime values
 		const TSharedPtr<FJsonObject> FinalVariables = MakeShareable(new FJsonObject);
 
-		// Start with default vars from the asset
 		for (const auto& Pair : QueryDef.DefaultVariables)
 		{
 			FinalVariables->SetStringField(Pair.Key, Pair.Value);
@@ -119,7 +144,6 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 
 		if (!bUseNestedJson)
 		{
-			// Overwrite/append with runtime vars
 			for (const auto& Pair : RuntimeVariables)
 			{
 				FinalVariables->SetStringField(Pair.Key, Pair.Value);
@@ -127,10 +151,11 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 		}
 		else
 		{
+			// Dot-notation key expansion: "input.email" -> { input: { email: ... } }
 			for (const auto& Pair : RuntimeVariables)
 			{
 				const FString& DotKey = Pair.Key;
-				const FString& Value = Pair.Value;
+				const FString& Value  = Pair.Value;
 
 				TArray<FString> Keys;
 				DotKey.ParseIntoArray(Keys, TEXT("."));
@@ -143,20 +168,13 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 
 					if (i == Keys.Num() - 1)
 					{
-						// Last key: set the value as number or string
-						if (Value.IsNumeric())
+						if (Value.IsNumeric() && !Value.Contains(TEXT(".")))
 						{
-							// Try parse as int first, fallback to double if needed
-							if (Value.IsNumeric() && !Value.Contains(TEXT(".")))
-							{
-								int64 IntVal = FCString::Atoi64(*Value);
-								Current->SetNumberField(Key, static_cast<double>(IntVal));
-							}
-							else
-							{
-								double DoubleVal = FCString::Atod(*Value);
-								Current->SetNumberField(Key, DoubleVal);
-							}
+							Current->SetNumberField(Key, static_cast<double>(FCString::Atoi64(*Value)));
+						}
+						else if (Value.IsNumeric())
+						{
+							Current->SetNumberField(Key, FCString::Atod(*Value));
 						}
 						else
 						{
@@ -165,7 +183,6 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 					}
 					else
 					{
-						// Intermediate keys: descend or create nested object
 						TSharedPtr<FJsonObject> Next;
 						const TSharedPtr<FJsonObject>* ExistingPtr = nullptr;
 						if (Current->TryGetObjectField(Key, ExistingPtr) && ExistingPtr && ExistingPtr->IsValid())
@@ -183,48 +200,33 @@ void UCrowdyQuerySubsystem::ExecuteQueryByID(const EGraphQLQuery QueryID,
 			}
 		}
 
-		// Delegate to the existing ExecuteGraphQLQuery
-		ExecuteQuery(QueryDef.QueryBody, bIncludeAuthToken, FinalVariables);
+		ExecuteQuery(QueryID, QueryDef.QueryBody, bIncludeAuthToken, FinalVariables);
+
 	}, LowLevelTasks::ETaskPriority::BackgroundNormal);
 }
 
-void UCrowdyQuerySubsystem::SetEndpoint(const FString& InEndpoint)
+void UCrowdyQuerySubsystem::ExecuteQueryWithBody(EGraphQLQuery QueryID, const FString& InlineBody,
+                                                  const TMap<FString, FString>& RuntimeVariables,
+                                                  bool bIncludeAuthToken)
 {
-	GraphQLEndpoint = InEndpoint;
-	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK]: GraphQL Endpoint set to %s"), *InEndpoint);
+	UE::Tasks::Launch(UE_SOURCE_LOCATION,
+		[this, QueryID, InlineBody, RuntimeVariables, bIncludeAuthToken]()
+		{
+			const TSharedPtr<FJsonObject> Vars = MakeShared<FJsonObject>();
+			for (const auto& Pair : RuntimeVariables)
+				Vars->SetStringField(Pair.Key, Pair.Value);
+
+			ExecuteQuery(QueryID, InlineBody, bIncludeAuthToken, Vars);
+		}, LowLevelTasks::ETaskPriority::BackgroundNormal);
 }
 
-FString UCrowdyQuerySubsystem::GetCurrentEndpoint() const
-{
-	return GraphQLEndpoint;
-}
-
-FQueryStats UCrowdyQuerySubsystem::GetQueryStats() const
-{
-	FQueryStats QueryStats;
-	QueryStats.bIsReceivingData = bIsReceivingData.load();
-	QueryStats.QueriesSentPerSecond = QueriesSentPerSecond.load();
-	QueryStats.QueryBytesSentPerSecond = QueryBytesSentPerSecond.load();
-	QueryStats.ResponseBytesReceivedPerSecond = ResponseBytesReceivedPerSecond.load();
-	QueryStats.ResponseReceivedPerSecond = ResponseReceivedPerSecond.load();
-	return QueryStats;
-}
-
-void UCrowdyQuerySubsystem::UpdateStats()
-{
-	QueriesSentPerSecond.store(0, std::memory_order_relaxed);
-	QueryBytesSentPerSecond.store(0, std::memory_order_relaxed);
-	ResponseBytesReceivedPerSecond.store(0, std::memory_order_relaxed);
-	ResponseReceivedPerSecond.store(0, std::memory_order_relaxed);
-	bIsReceivingData.store(false);
-}
-
-void UCrowdyQuerySubsystem::ExecuteQuery(const FString& Query, const bool bIncludeAuthToken,
-                                         const TSharedPtr<FJsonObject>& Variables)
+void UCrowdyQuerySubsystem::ExecuteQuery(EGraphQLQuery QueryID, const FString& Query,
+                                          const bool bIncludeAuthToken, const TSharedPtr<FJsonObject>& Variables)
 {
 	if (Query.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Empty query provided"));
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Empty query body for query ID %d"),
+			static_cast<int32>(QueryID));
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [this]()
 		{
 			OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"Empty query provided\"}"));
@@ -235,7 +237,7 @@ void UCrowdyQuerySubsystem::ExecuteQuery(const FString& Query, const bool bInclu
 	FHttpModule* Http = &FHttpModule::Get();
 	if (!Http)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Failed to get HTTP module"));
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: HTTP module unavailable"));
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [this]()
 		{
 			OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"HTTP module not available\"}"));
@@ -243,36 +245,49 @@ void UCrowdyQuerySubsystem::ExecuteQuery(const FString& Query, const bool bInclu
 		return;
 	}
 
-	const TSharedRef<IHttpRequest> Request = Http->CreateRequest();
-	
-	if (GetCurrentEndpoint().IsEmpty())
+	// ── Descriptor-driven routing ────────────────────────────────────────────
+	// Per-query endpoint, timeout, and auth requirements all come from the
+	// descriptor table in FCrowdyQueryDescriptor.cpp. No hard-coded values here.
+
+	const FCrowdyQueryDescriptor* Desc        = FCrowdyQueryDescriptors::Find(QueryID);
+	const bool                    bIsManagement  = Desc ? Desc->ApiTarget == ECrowdyApiTarget::Management : false;
+	const float                   TimeoutSeconds = Desc ? Desc->TimeoutSeconds : 10.f;
+
+	FString ResolvedEndpoint;
+	if (bIsManagement)
 	{
-		const FString DevEndpoint = TEXT("https://dev-webapi.crowd.rocks/graphql");
-		Request->SetURL(DevEndpoint);
+		// Management URL has no /graphql suffix per the SDK spec — we append it here
+		ResolvedEndpoint = ManagementEndpoint.IsEmpty()
+			? TEXT("https://api.dev.crowdedkingdoms.com/graphql")
+			: ManagementEndpoint + TEXT("/graphql");
 	}
 	else
 	{
-		Request->SetURL(GetCurrentEndpoint());
+		// Game URL already includes /graphql
+		ResolvedEndpoint = GameEndpoint.IsEmpty()
+			? TEXT("https://game.dev1.dev.cks-env.com/graphql")
+			: GameEndpoint;
 	}
-	
+
+	const TSharedRef<IHttpRequest> Request = Http->CreateRequest();
+	Request->SetURL(ResolvedEndpoint);
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-	Request->SetTimeout(120.0f);
+	Request->SetTimeout(TimeoutSeconds);
 
 	if (bIncludeAuthToken && HasAuthToken())
 	{
-		const FString AuthHeader = FString::Printf(TEXT("Bearer %s"), *AuthToken);
-		Request->SetHeader(TEXT("Authorization"), AuthHeader);
-		//UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] GraphQL: Added authorization header"));
+		Request->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *AuthToken));
 	}
 	else if (bIncludeAuthToken && !HasAuthToken())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[CrowdySDK] GraphQL: Auth requested but no token available"));
+		UE_LOG(LogTemp, Warning, TEXT("[CrowdySDK] GraphQL: Auth requested for query %d but no token is set"),
+			static_cast<int32>(QueryID));
 	}
 
+	// Serialize query + variables to JSON
 	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
 	JsonObject->SetStringField(TEXT("query"), Query);
-
 	if (Variables.IsValid())
 	{
 		JsonObject->SetObjectField(TEXT("variables"), Variables);
@@ -281,13 +296,23 @@ void UCrowdyQuerySubsystem::ExecuteQuery(const FString& Query, const bool bInclu
 	FString OutputString;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
 	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
-
 	Request->SetContentAsString(OutputString);
-	Request->OnProcessRequestComplete().BindUObject(this, &UCrowdyQuerySubsystem::OnHttpsRequestComplete);
+
+	// ── Bind completion: capture QueryID by value in the lambda so the response
+	//    handler always knows which query produced this response.
+	//    This eliminates JSON field sniffing in ParseAndDispatchToServices.
+	TWeakObjectPtr<UCrowdyQuerySubsystem> WeakThis(this);
+	Request->OnProcessRequestComplete().BindLambda(
+		[WeakThis, QueryID](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bWasSuccessful)
+		{
+			if (UCrowdyQuerySubsystem* Self = WeakThis.Get())
+				Self->OnHttpsRequestComplete(Req, Res, bWasSuccessful, QueryID);
+		});
 
 	if (!Request->ProcessRequest())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Failed to process HTTP request"));
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Failed to send request for query %d"),
+			static_cast<int32>(QueryID));
 		AsyncTask(ENamedThreads::GameThread, [this]()
 		{
 			OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"Failed to process HTTP request\"}"));
@@ -295,34 +320,27 @@ void UCrowdyQuerySubsystem::ExecuteQuery(const FString& Query, const bool bInclu
 		return;
 	}
 
+	// ── Stats: measure the actual query body bytes, not just the HTTP verb
 	QueriesSentPerSecond.fetch_add(1, std::memory_order_relaxed);
-	int32 QuerySize = 0;
-	QuerySize = Request->GetVerb().Len();
-
-	TArray<FString> Headers = Request->GetAllHeaders();
-	for (const FString& Header : Headers)
-	{
-		QuerySize += Header.Len();
-	}
-
-	QueryBytesSentPerSecond.fetch_add(QuerySize, std::memory_order_relaxed);
+	QueryBytesSentPerSecond.fetch_add(OutputString.Len(), std::memory_order_relaxed);
 }
 
+// ─── Response handling ────────────────────────────────────────────────────────
+
 void UCrowdyQuerySubsystem::OnHttpsRequestComplete(FHttpRequestPtr Request, FHttpResponsePtr Response,
-                                                   bool bWasSuccessful)
+                                                    bool bWasSuccessful, EGraphQLQuery QueryID)
 {
 	TWeakObjectPtr<UCrowdyQuerySubsystem> WeakThis = this;
 
-	UE::Tasks::Launch(UE_SOURCE_LOCATION, [WeakThis, bWasSuccessful, Response]()
+	UE::Tasks::Launch(UE_SOURCE_LOCATION, [WeakThis, bWasSuccessful, Response, QueryID]()
 	{
 		if (!WeakThis.IsValid())
-		{
 			return;
-		}
 
 		if (!bWasSuccessful || !Response.IsValid())
 		{
-			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: HTTP request failed"));
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: HTTP request failed for query %d"),
+				static_cast<int32>(QueryID));
 			AsyncTask(ENamedThreads::GameThread, [WeakThis]()
 			{
 				WeakThis->OnComplete.ExecuteIfBound(false, TEXT("{\"error\": \"HTTP request failed\"}"));
@@ -330,17 +348,16 @@ void UCrowdyQuerySubsystem::OnHttpsRequestComplete(FHttpRequestPtr Request, FHtt
 			return;
 		}
 
-		const int32 ResponseCode = Response->GetResponseCode();
-		FString ResponseContent = Response->GetContentAsString();
+		const int32 ResponseCode    = Response->GetResponseCode();
+		FString     ResponseContent = Response->GetContentAsString();
 
 		if (!WeakThis.IsValid())
 			return;
 
-		const bool bSuccess = (ResponseCode >= 200 && ResponseCode < 300);
-
-		if (!bSuccess)
+		if (ResponseCode < 200 || ResponseCode >= 300)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Server returned error code: %d"), ResponseCode);
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: Server returned %d for query %d"),
+				ResponseCode, static_cast<int32>(QueryID));
 			AsyncTask(ENamedThreads::GameThread, [WeakThis, ResponseContent]()
 			{
 				WeakThis->OnComplete.ExecuteIfBound(false, ResponseContent);
@@ -352,292 +369,89 @@ void UCrowdyQuerySubsystem::OnHttpsRequestComplete(FHttpRequestPtr Request, FHtt
 		WeakThis->ResponseBytesReceivedPerSecond.store(
 			WeakThis->ResponseBytesReceivedPerSecond.load(std::memory_order_relaxed) + ResponseContent.Len(),
 			std::memory_order_relaxed);
-		WeakThis->bIsReceivingData.store(true, std::memory_order::memory_order_relaxed);
+		WeakThis->bIsReceivingData.store(true, std::memory_order_relaxed);
 
+		WeakThis->ParseAndDispatchToServices(ResponseContent, QueryID);
 
-		WeakThis->ParseAndDispatchToServices(ResponseContent);
-
+		// Also fire the raw-JSON delegate for callers that still want unprocessed data
 		AsyncTask(ENamedThreads::GameThread, [WeakThis, ResponseContent]()
 		{
 			WeakThis->OnComplete.ExecuteIfBound(true, ResponseContent);
 		});
+
 	}, LowLevelTasks::ETaskPriority::BackgroundNormal);
 }
 
-void UCrowdyQuerySubsystem::ParseAndDispatchToServices(const FString& ResponseContent) const
+// ─── Parse & dispatch ─────────────────────────────────────────────────────────
+//
+// Previous implementation: ~240 lines of duplicated switch statements that had
+// to be kept in sync manually for every query type (both success and error paths).
+//
+// This implementation: descriptor lookup + factory + single ParseResponse call.
+// Adding a new query type no longer requires touching this function at all.
+
+void UCrowdyQuerySubsystem::ParseAndDispatchToServices(const FString& ResponseContent, EGraphQLQuery QueryID) const
 {
+	// 1. Deserialize JSON
 	TSharedPtr<FJsonObject> ParsedData;
-	const EQueryResponseType ResponseType = QueryParser->ParseResponse(ResponseContent, ParsedData);
+	const TSharedRef<TJsonReader<TCHAR>> JsonReader = TJsonReaderFactory<TCHAR>::Create(ResponseContent);
 
-	if (ResponseType == EQueryResponseType::Error)
+	if (!FJsonSerializer::Deserialize(JsonReader, ParsedData) || !ParsedData.IsValid())
 	{
-		TArray<FString> ErrorMessages = QueryParser->GetErrorMessages(ParsedData);
-		TArray<int32> ErrorCodes = QueryParser->GetErrorCodes(ParsedData);
-		TArray<FString> ErrorPaths = QueryParser->GetErrorPaths(ParsedData);
+		UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL: JSON parse failure for query %d"),
+			static_cast<int32>(QueryID));
+		return;
+	}
 
-		const EQueryResponseType ErrorResponseType = QueryParser->DetermineErrorResponseType(ParsedData);
+	// 2. QueryID -> ResponseType via descriptor table (no field sniffing)
+	const EQueryResponseType ResponseType = FCrowdyQueryDescriptors::GetResponseType(QueryID);
 
-		UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] GraphQL Handling error for operation type: %d"),
-		       static_cast<int32>(ErrorResponseType));
+	// 3. Construct the correct response object via factory (no switch statement)
+	TSharedPtr<ICrowdyQueryResponse> Response = FCrowdyResponseFactory::Get().Create(ResponseType);
 
-		// Log error details
-		for (int32 i = 0; i < ErrorMessages.Num(); ++i)
+	if (!Response.IsValid())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[CrowdySDK] ParseAndDispatch: No factory entry for query %d (response type %d). "
+			     "Add a Register() line in FCrowdyResponseFactory::RegisterAll()."),
+			static_cast<int32>(QueryID), static_cast<int32>(ResponseType));
+		return;
+	}
+
+	// 4. Handle GraphQL-level errors
+	if (QueryParser->HasErrors(ParsedData))
+	{
+		const TArray<FString> Errors = QueryParser->GetErrorMessages(ParsedData);
+
+		for (int32 i = 0; i < Errors.Num(); ++i)
 		{
-			FString ErrorMessage = ErrorMessages[i];
-			const int32 ErrorCode = (i < ErrorCodes.Num()) ? ErrorCodes[i] : 0;
-			FString ErrorPath = (i < ErrorPaths.Num()) ? ErrorPaths[i] : TEXT("unknown");
-
-			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL Error - Path: %s, Code: %d, Message: %s"),
-			       *ErrorPath, ErrorCode, *ErrorMessage);
+			UE_LOG(LogTemp, Error, TEXT("[CrowdySDK] GraphQL Error [%d/%d] for query %d: %s"),
+				i + 1, Errors.Num(), static_cast<int32>(QueryID), *Errors[i]);
 		}
 
-		const FString CleanMsg = ErrorMessages[0].TrimStartAndEnd();
-		
-		TSharedPtr<ICrowdyQueryResponse> Response;
-		
-		// Dispatch to the appropriate service based on an error type
-		switch (ErrorResponseType)
+		if (!Errors.IsEmpty())
 		{
-		case EQueryResponseType::Login:
+			// Special case: UDP gate-keep ("Insufficient permissions") is a valid
+			// transient state, not a hard failure. Setting bGateKeep lets the
+			// response parse as valid so the subsystem can broadcast correctly.
+			if (ResponseType == EQueryResponseType::UDP_Info
+				&& Errors[0].Contains(TEXT("Insufficient"), ESearchCase::IgnoreCase))
 			{
-				const TSharedPtr<FLoginResponse> LoginResponse = MakeShared<FLoginResponse>();
-				LoginResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(LoginResponse);
-				break;
-			}
-		case EQueryResponseType::Register:
-			{
-				const TSharedPtr<FRegisterResponse> RegisterResponse = MakeShared<FRegisterResponse>();
-				RegisterResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(RegisterResponse);
-				break;
-			}
-		case EQueryResponseType::UDP_Info:
-			{
-				const TSharedPtr<FUDPAddressNotify> UDPInfoResponse = MakeShared<FUDPAddressNotify>();
-				if (CleanMsg.Contains(TEXT("Insufficient"), ESearchCase::IgnoreCase))
-				{
-					UDPInfoResponse->bGateKeep = true;
-				}
-				
-				UDPInfoResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UDPInfoResponse);
-				break;
+				FUDPAddressNotify& UDPResponse = static_cast<FUDPAddressNotify&>(*Response);
+				UDPResponse.bGateKeep = true;
+				UDPResponse.ParseResponse(ParsedData); // returns early due to bGateKeep flag
+				DataRegistry->DispatchResponse(Response);
+				return;
 			}
 
-		case EQueryResponseType::UpdateChunk:
-			{
-				const TSharedPtr<FUpdateChunkResponse> UpdateChunkResponse = MakeShared<FUpdateChunkResponse>();
-				UpdateChunkResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateChunkResponse);
-				break;
-			}
-		case EQueryResponseType::GetChunkByDistance:
-			{
-				const TSharedPtr<FGetChunkResponse> GetChunkResponse = MakeShared<FGetChunkResponse>();
-				GetChunkResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(GetChunkResponse);
-				break;
-			}
-		case EQueryResponseType::CreateAvatar:
-			{
-				const TSharedPtr<FAvatarCreateResponse> CreateAvatarResponse = MakeShared<FAvatarCreateResponse>();
-				CreateAvatarResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(CreateAvatarResponse);
-				break;
-			}
-		case EQueryResponseType::MyAvatars:
-			{
-				const TSharedPtr<FFetchAvatarsResponse> MyAvatarsResponse = MakeShared<FFetchAvatarsResponse>();
-				MyAvatarsResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(MyAvatarsResponse);
-				break;
-			}
-		case EQueryResponseType::UpdateAvatar:
-			{
-				const TSharedPtr<FAvatarNameUpdateResponse> UpdateAvatarResponse = MakeShared<FAvatarNameUpdateResponse>();
-				UpdateAvatarResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarResponse);
-				break;
-			}
-		case EQueryResponseType::UpdateAvatarState:
-			{
-				const TSharedPtr<FAvatarStateUpdateResponse> UpdateAvatarStateResponse = MakeShared<FAvatarStateUpdateResponse>();
-				UpdateAvatarStateResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarStateResponse);
-				break;	
-			}
-		case EQueryResponseType::TeleportRequest:
-			{
-				const TSharedPtr<FTeleportResponse> TeleportResponse = MakeShared<FTeleportResponse>();
-				TeleportResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(TeleportResponse);
-				break;
-			}
-
-		case EQueryResponseType::UpdateUserState:
-			{
-				const TSharedPtr<FUpdateUserStateResponse> UserStateResponse = MakeShared<FUpdateUserStateResponse>();
-				UserStateResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
-				break;
-			}
-
-		case EQueryResponseType::GetUserState:
-			{
-				const TSharedPtr<FGetUserStateResponse> UserStateResponse = MakeShared<FGetUserStateResponse>();
-				UserStateResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
-				break;
-			}
-
-		case ListVoxelUpdatesByDistance:
-			{
-				const TSharedPtr<FVoxelListByDistanceResponse> VoxelListByDistanceResponse = MakeShared<FVoxelListByDistanceResponse>();
-				VoxelListByDistanceResponse->ParseResponse(ParsedData);
-				Response = StaticCastSharedPtr<ICrowdyQueryResponse>(VoxelListByDistanceResponse);
-				break;
-			}
-
-		default:
-			UE_LOG(LogTemp, Error, TEXT("Unknown error response type: %d"),
-			       static_cast<int32>(ErrorResponseType));
-			break;
+			Response->ErrorMessage = Errors[0];
 		}
-	
+
 		DataRegistry->DispatchResponse(Response);
-		
-		return; // Exit early since we handled the error
+		return;
 	}
 
-	TSharedPtr<ICrowdyQueryResponse> Response;
-
-	switch (ResponseType)
-	{
-	case EQueryResponseType::Login:
-		{
-			TSharedPtr<FLoginResponse> LoginResponse = MakeShared<FLoginResponse>();
-			LoginResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(LoginResponse);
-			break;
-		}
-	case EQueryResponseType::Register:
-		{
-			TSharedPtr<FRegisterResponse> RegisterResponse = MakeShared<FRegisterResponse>();
-			RegisterResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(RegisterResponse);
-			break;
-		}
-	case EQueryResponseType::UDP_Info:
-		{
-			TSharedPtr<FUDPAddressNotify> UDPInfoResponse = MakeShared<FUDPAddressNotify>();
-			UDPInfoResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UDPInfoResponse);
-			break;
-		}
-	case EQueryResponseType::VoxelList:
-		{
-			TSharedPtr<FVoxelListResponse> VoxelListResponse = MakeShared<FVoxelListResponse>();
-			VoxelListResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(VoxelListResponse);
-			break;
-		}
-	case EQueryResponseType::ListVoxelUpdatesByDistance:
-		{
-			TSharedPtr<FVoxelListByDistanceResponse> VoxelListByDistanceResponse = MakeShared<
-				FVoxelListByDistanceResponse>();
-			VoxelListByDistanceResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(VoxelListByDistanceResponse);
-			break;
-		}
-	case EQueryResponseType::TeleportRequest:
-		{
-			TSharedPtr<FTeleportResponse> TeleportResponse = MakeShared<FTeleportResponse>();
-			TeleportResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(TeleportResponse);
-			break;
-		}
-	case EQueryResponseType::VersionInfo:
-		{
-			TSharedPtr<FVersionInfoResponse> VersionInfoResponse = MakeShared<FVersionInfoResponse>();
-			VersionInfoResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(VersionInfoResponse);
-			break;
-		}
-	case EQueryResponseType::GetUserState:
-		{
-			TSharedPtr<FGetUserStateResponse> UserStateResponse = MakeShared<FGetUserStateResponse>();
-			UserStateResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
-			break;
-		}
-	case EQueryResponseType::UpdateUserState:
-		{
-			TSharedPtr<FUpdateUserStateResponse> UserStateResponse = MakeShared<FUpdateUserStateResponse>();
-			UserStateResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UserStateResponse);
-			break;
-		}
-	case EQueryResponseType::GetChunkByDistance:
-		{
-			TSharedPtr<FGetChunkResponse> GetChunkResponse = MakeShared<FGetChunkResponse>();
-			GetChunkResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(GetChunkResponse);
-			break;
-		}
-	case EQueryResponseType::UpdateChunk:
-		{
-			TSharedPtr<FUpdateChunkResponse> UpdateChunkResponse = MakeShared<FUpdateChunkResponse>();
-			UpdateChunkResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateChunkResponse);
-			break;
-		}
-	
-	// Not implemented right now
-	case EQueryResponseType::CreateAvatar:
-		{
-			TSharedPtr<FAvatarCreateResponse> UpdateAvatarResponse = MakeShared<FAvatarCreateResponse>();
-			UpdateAvatarResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarResponse);
-			break;
-		}
-	case EQueryResponseType::MyAvatars:
-		{
-			TSharedPtr<FFetchAvatarsResponse> FetchAvatarsResponse = MakeShared<FFetchAvatarsResponse>();
-			FetchAvatarsResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(FetchAvatarsResponse);
-			break;
-		}
-	case EQueryResponseType::UpdateAvatar:
-		{
-			TSharedPtr<FAvatarNameUpdateResponse> UpdateAvatarNameResponse = MakeShared<FAvatarNameUpdateResponse>();
-			UpdateAvatarNameResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarNameResponse);
-			break;
-		}
-	case EQueryResponseType::UpdateAvatarState:
-		{
-			TSharedPtr<FAvatarStateUpdateResponse> UpdateAvatarStateResponse = MakeShared<FAvatarStateUpdateResponse>();
-			UpdateAvatarStateResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(UpdateAvatarStateResponse);
-			break;
-		}
-	case EQueryResponseType::DeleteAvatar:
-		{
-			TSharedPtr<FAvatarDeleteResponse> DeleteAvatarResponse = MakeShared<FAvatarDeleteResponse>();
-			DeleteAvatarResponse->ParseResponse(ParsedData);
-			Response = StaticCastSharedPtr<ICrowdyQueryResponse>(DeleteAvatarResponse);
-			break;
-		}
-	
-	default:
-		break;
-	}
-
-	if (Response.IsValid() && DataRegistry)
-	{
-		DataRegistry->DispatchResponse(Response);
-	}
+	// 5. Success path
+	Response->ParseResponse(ParsedData);
+	DataRegistry->DispatchResponse(Response);
 }
-
-

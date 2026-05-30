@@ -23,6 +23,11 @@
 			"Name": "CKSharedTypes",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "CrowdySDKEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
 		}
 	],
 	"Plugins": [
@@ -35,5 +40,4 @@
 			"Enabled": true
 		}
 	]
-	
 }

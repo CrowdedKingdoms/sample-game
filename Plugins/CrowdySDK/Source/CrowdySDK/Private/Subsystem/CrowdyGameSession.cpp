@@ -2,6 +2,8 @@
 
 
 #include "Subsystem/CrowdyGameSession.h"
+#include "Async/TaskGraphInterfaces.h"
+#include "Utils/HelperFunctions.h"
 
 void UCrowdyGameSession::Initialize(FSubsystemCollectionBase& Collection)
 {

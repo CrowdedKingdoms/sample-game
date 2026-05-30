@@ -2,13 +2,10 @@
 #include "CoreMinimal.h"
 #include "FSampleSetObjectLocation.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(CrowdyRep="Event"))
 struct FSampleSetObjectLocation
 {
 	GENERATED_BODY()
-	
-	UPROPERTY(BlueprintReadWrite)
-	FGuid ObjectID;
 	
 	UPROPERTY(BlueprintReadWrite)
 	FVector Location;

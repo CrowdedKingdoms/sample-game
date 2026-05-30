@@ -312,7 +312,6 @@ bool UCrowdyActorManager::LoadConfig()
 
 void UCrowdyActorManager::HandleActorSpawned(FGuid UUID, FInstancedStruct InitialState, int32 ActorCount)
 {
-	
 	// Release first if already tracked — handles stop/restart for same UUID
 	if (ActorPool->FindActor(UUID))
 		ActorPool->ReleaseActor(UUID);

@@ -25,7 +25,7 @@ void UActorUpdatePayloadRegistry::LoadFromDataAsset(const UActorUpdatePayloadTyp
 			continue;
 		}
 		
-		StructToID.Add(Entry.ActorUpdateType, Entry.TypeID);
+		StructPathToID.Add(FName(Entry.ActorUpdateType.GetPathName()), Entry.TypeID);
 		IDToStruct.Add(Entry.TypeID, Entry.ActorUpdateType);
 		IDToName.Add(Entry.TypeID, Entry.ActorUpdateName);
 		
@@ -35,42 +35,84 @@ void UActorUpdatePayloadRegistry::LoadFromDataAsset(const UActorUpdatePayloadTyp
 	bLoaded.store(true, std::memory_order_release);
 }
 
-bool UActorUpdatePayloadRegistry::GetID(const UScriptStruct* Struct, uint8& OutID) const
+bool UActorUpdatePayloadRegistry::GetID(const UScriptStruct* Struct, FCrowdyTypeID& OutID) const
 {
-	if (!bLoaded.load(std::memory_order_acquire))
-		return false;
+	if (!Struct) return false;
+
+	const FName PathKey = FName(*Struct->GetPathName());
 	
-	if (!Struct) 
-		return false;
-	
-	const uint8* Found = StructToID.Find(Struct);
-	
-	if (!Found)
-		return false;
-	
-	OutID = *Found;
-	return true;
+	const FCrowdyTypeID* Found = StructPathToID.Find(PathKey);
+	if (Found)
+	{
+		OutID = *Found;
+		return true;
+	}
+
+	return false;
 }
 
-bool UActorUpdatePayloadRegistry::GetName(const uint8 ID, FName& OutName) const
+bool UActorUpdatePayloadRegistry::GetName(const UScriptStruct* Struct, FName& OutName) const
 {
-	if (!bLoaded.load(std::memory_order_acquire))
-		return false;
-	
-	const FName* Found = IDToName.Find(ID);
-	
-	if (!Found)
-		return false;
-	
+	if (!Struct) return false;
+
+	FCrowdyTypeID TypeID;
+	if (!GetID(Struct, TypeID)) return false;
+
+	const FName* Found = IDToName.Find(TypeID);
+	if (!Found) return false;
+
 	OutName = *Found;
 	return true;
 }
 
-UScriptStruct* UActorUpdatePayloadRegistry::Resolve(const uint8 ID) const
+UScriptStruct* UActorUpdatePayloadRegistry::Resolve(const FCrowdyTypeID ID) const
 {
-	if (!bLoaded.load(std::memory_order_acquire))
-		return nullptr;
-	
 	const TObjectPtr<UScriptStruct>* Found = IDToStruct.Find(ID);
 	return Found ? Found->Get() : nullptr;
+}
+
+void UActorUpdatePayloadRegistry::RegisterStruct(UScriptStruct* Struct, FCrowdyTypeID TypeID)
+{
+	ensure(IsInGameThread());
+	ensureMsgf(!bSealed.load(std::memory_order_relaxed),
+		TEXT("[ActorUpdatePayloadRegistry] RegisterStruct called after Seal()"));
+
+	if (IDToStruct.Contains(TypeID))
+	{
+		const UScriptStruct* Existing = IDToStruct[TypeID].Get();
+		if (Existing == Struct) return;
+
+		UE_LOG(LogTemp, Fatal,
+			TEXT("[ActorUpdatePayloadRegistry] Hash collision: TypeID=%d claimed by '%s' and '%s'."),
+			TypeID, *Existing->GetPathName(), *Struct->GetPathName());
+		return;
+	}
+
+	const FName PathKey = FName(*Struct->GetPathName());
+
+	IDToStruct.Add(TypeID, Struct);
+	StructPathToID.Add(PathKey, TypeID);
+	IDToName.Add(TypeID, FName(*Struct->GetName()));
+
+	UE_LOG(LogTemp, Log,
+		TEXT("[ActorUpdatePayloadRegistry] Registered '%s' -> TypeID=%d | Path=%s"),
+		*Struct->GetName(), TypeID, *Struct->GetPathName());
+}
+
+void UActorUpdatePayloadRegistry::Seal()
+{
+	ensure(IsInGameThread());
+	bSealed.store(true, std::memory_order_seq_cst);
+
+	UE_LOG(LogTemp, Log,
+		TEXT("[ActorUpdatePayloadRegistry] Sealed. %d actor update types registered."),
+		IDToStruct.Num());
+}
+
+void UActorUpdatePayloadRegistry::GetAllRegisteredNames(TArray<FName>& OutNames) const
+{
+	ensureMsgf(bSealed.load(std::memory_order_acquire),
+		TEXT("[ActorUpdatePayloadRegistry] GetAllRegisteredNames called before Seal()"));
+
+	IDToName.GenerateValueArray(OutNames);
 }

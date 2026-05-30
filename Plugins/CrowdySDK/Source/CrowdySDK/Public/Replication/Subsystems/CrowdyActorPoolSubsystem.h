@@ -8,6 +8,30 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "CrowdyActorPoolSubsystem.generated.h"
 
+USTRUCT()
+struct FSlot
+{
+	GENERATED_BODY()
+	
+	TWeakObjectPtr<AActor> Actor;
+	FGuid UUID;
+	bool bActive = false;
+};
+
+
+USTRUCT()
+struct FPool
+{
+	GENERATED_BODY()
+	
+	TSubclassOf<AActor> ActorClass;
+	
+	UPROPERTY()
+	TObjectPtr<UCrowdyActorPoolPolicy> Policy;
+	
+	TArray<FSlot> Slots;
+};
+
 /**
  * 
  */
@@ -44,8 +68,11 @@ public:
 	AActor* FindActor(const FGuid& ID);
 	
 	UFUNCTION(BlueprintCallable, Category="Actor Pool")
-	FGuid FindID(bool& bIsValid ,const AActor* Actor);
-
+	FGuid FindActorID(bool& bIsValid ,const AActor* Actor);
+	
+	//C++ Overload
+	FGuid FindActorID(const AActor* Actor);
+	
 	/*Convenience, find and cast. Returns null if not found or wrong type.*/
 	template<typename T>
 	T* FindActorAs(const FGuid& ID, bool& bIsValid)
@@ -55,28 +82,14 @@ public:
 	
 private:
 	
-	struct FSlot
-	{
-		TWeakObjectPtr<AActor> Actor;
-		FGuid UUID;
-		bool bActive = false;
-	};
-	
-	struct FPool
-	{
-		TSubclassOf<AActor> ActorClass;
-		TObjectPtr<UCrowdyActorPoolPolicy> Policy;
-		TArray<FSlot> Slots;
-	};
-	
-	
-	TMap<UClass*, FPool> Pools;
+	UPROPERTY()
+	TMap<TSubclassOf<AActor>, FPool> Pools;
 	
 	UPROPERTY()
-	TMap<FGuid, AActor*> IDToActor;
+	TMap<FGuid, TWeakObjectPtr<AActor>> IDToActor;
 	
 	UPROPERTY()
-	TMap<AActor*, FGuid> ActorToID;
+	TMap<TObjectPtr<AActor>, FGuid> ActorToID;
 	
 	FPool* FindPool(const UClass* ActorClass);
 };

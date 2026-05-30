@@ -2,10 +2,9 @@
 
 
 #include "Core/Managers/SamplePawnManager.h"
-#include "Core/Structs/Game/FSampleActorUpdate.h"
+#include "Core/Structs/Events/FChangeAnimState.h"
 #include "Interfaces/ReplicatedActor.h"
-#include "Replication/Subsystems/CrowdyActorPoolSubsystem.h"
-#include "Replication/Subsystems/CrowdyActorTracker.h"
+#include "Utils/CrowdyUtilities.h"
 
 
 // Sets default values
@@ -19,26 +18,6 @@ ASamplePawnManager::ASamplePawnManager()
 void ASamplePawnManager::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	const UWorld* World = GetWorld();
-	
-	if (!IsValid(World))
-	{
-		UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid world."));
-		return;
-	}
-	
-	ActorPoolSubsystem = World->GetSubsystem<UCrowdyActorPoolSubsystem>();
-
-	check(IsValid(ActorPoolSubsystem))
-	
-	if (!IsValid(ActorPoolSubsystem))
-	{
-		UE_LOG(LogTemp, Error, TEXT("[Pawn Manager]: Invalid actor pool subsystem."));
-		return;
-	}
-	
-	
 }
 
 // Called every frame
@@ -48,17 +27,17 @@ void ASamplePawnManager::Tick(float DeltaTime)
 }
 
 
-
-void ASamplePawnManager::ChangeAnimation(const FGuid& UUID, const ESampleAnimState NewAnimationState) const
+void ASamplePawnManager::ChangeInstanceAnimation(const FChangeAnimState& NewAnimState)
 {
+	bool bIsValid = false;
+	AActor* Actor = UCrowdyUtilities::FindCrowdyActor(this, NewAnimState.TargetID, bIsValid);
 	
-	AActor* Actor = ActorPoolSubsystem->FindActor(UUID);
-	
-	if (!IsValid(Actor))
+	if (!bIsValid)
+	{
 		return;
+	}
 	
-	// Dispatch the call to update the animation state inside the actor. Check BP_ReplicatedActor in Content/Replication for implementation
-	IReplicatedActor::Execute_ChangeAnimationState(Actor, NewAnimationState);
+	IReplicatedActor::Execute_ChangeAnimationState(Actor, NewAnimState.NewState);
 }
 
 

@@ -24,7 +24,7 @@ void UEventPayloadRegistry::LoadFromDataAsset(const UEventPayloadType* DataAsset
 			continue;
 		}
 
-		StructToID.Add(Entry.EventType, Entry.TypeID);
+		StructPathToID.Add(FName(Entry.EventType.GetPathName()), Entry.TypeID);
 		IDToStruct.Add(Entry.TypeID, Entry.EventType);
 		IDToName.Add(Entry.TypeID, Entry.EventName);
 
@@ -35,20 +35,24 @@ void UEventPayloadRegistry::LoadFromDataAsset(const UEventPayloadType* DataAsset
 	bLoaded.store(true, std::memory_order_release);
 }
 
-bool UEventPayloadRegistry::GetID(const UScriptStruct* Struct, int32& OutID) const
+bool UEventPayloadRegistry::GetID(const UScriptStruct* Struct, FCrowdyTypeID& OutID) const
 {
-	if (!bLoaded.load(std::memory_order_acquire)) return false;
 	if (!Struct) return false;
 
-	const int32* Found = StructToID.Find(Struct);
-	if (Found) { OutID = *Found; return true; }
+	const FName PathKey = FName(*Struct->GetPathName());
+	
+	const FCrowdyTypeID* Found = StructPathToID.Find(PathKey);
+	if (Found)
+	{
+		OutID = *Found;
+		return true;
+	}
+
 	return false;
 }
 
-bool UEventPayloadRegistry::GetName(const int32 ID, FName& OutName) const
+bool UEventPayloadRegistry::GetName(const FCrowdyTypeID ID, FName& OutName) const
 {
-	if (!bLoaded.load(std::memory_order_acquire)) return false;
-
 	const FName* Found = IDToName.Find(ID);
 	if (!Found) return false;
 
@@ -56,10 +60,75 @@ bool UEventPayloadRegistry::GetName(const int32 ID, FName& OutName) const
 	return true;
 }
 
-UScriptStruct* UEventPayloadRegistry::Resolve(const int32 ID) const
+UScriptStruct* UEventPayloadRegistry::Resolve(const FCrowdyTypeID ID) const
 {
-	if (!bLoaded.load(std::memory_order_acquire)) return nullptr;
 
 	const TObjectPtr<UScriptStruct>* Found = IDToStruct.Find(ID);
 	return Found ? Found->Get() : nullptr;
+}
+
+void UEventPayloadRegistry::RegisterStruct(UScriptStruct* Struct, FCrowdyTypeID TypeID)
+{
+	ensure(IsInGameThread());
+	ensureMsgf(!bSealed.load(std::memory_order_relaxed),
+		TEXT("[EventPayloadRegistry] RegisterStruct called after Seal()"));
+
+	if (IDToStruct.Contains(TypeID))
+	{
+		const UScriptStruct* Existing = IDToStruct[TypeID].Get();
+		if (Existing == Struct) return; // benign duplicate
+
+		UE_LOG(LogTemp, Fatal,
+			TEXT("[EventPayloadRegistry] Hash collision: TypeID=%d is claimed by")
+			TEXT(" both '%s' and '%s'. Add an entry to IDOverrides in")
+			TEXT(" CrowdyDeveloperSettings to resolve."),
+			TypeID,
+			*Existing->GetPathName(),
+			*Struct->GetPathName());
+		return;
+	}
+	
+	const FName PathKey = FName(*Struct->GetPathName());
+	
+	IDToStruct.Add(TypeID, Struct);
+	StructPathToID.Add(PathKey, TypeID);
+	IDToName.Add(TypeID, FName(*Struct->GetName()));
+
+	UE_LOG(LogTemp, Verbose,
+		TEXT("[EventPayloadRegistry] Registered '%s' -> TypeID=%d"),
+		*Struct->GetName(), TypeID);
+}
+
+void UEventPayloadRegistry::Seal()
+{
+	ensure(IsInGameThread());
+	// seq_cst fence: guarantees every worker thread started after
+	// this call sees the complete, populated maps.
+	bSealed.store(true, std::memory_order_seq_cst);
+
+	UE_LOG(LogTemp, Log,
+		TEXT("[EventPayloadRegistry] Sealed. %d event types registered."),
+		IDToStruct.Num());
+}
+
+void UEventPayloadRegistry::GetAllRegisteredNames(TArray<const UScriptStruct*> RegisteredEvents,
+	TArray<FName>& OutNames) const
+{
+	ensureMsgf(bSealed.load(std::memory_order_acquire),
+		TEXT("[EventPayloadRegistry] GetAllRegisteredNames called before Seal()"));
+	
+	for (const UScriptStruct* Event : RegisteredEvents)
+	{
+		FCrowdyTypeID ID;
+		
+		if (!GetID(Event, ID))
+			continue;
+		
+		FName Name;
+		
+		if (!GetName(ID, Name))
+			continue;
+			
+		OutNames.Add(Name);
+	}
 }

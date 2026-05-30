@@ -8,11 +8,31 @@
 #include "TimerManager.h"
 #include "HAL/RunnableThread.h"
 #include "Engine/World.h"
+#include "Core/UDP/Enums/ECrowdyUDPProtocol.h"
 #include "CrowdyUDPSubsystem.generated.h"
 
 struct FUDPAddressNotify;
 class FUDPListener;
 class UCrowdyGameSession;
+
+/**
+ * Observable lifecycle state of the UDP connection.
+ * Read this via UCrowdySDKSubsystem::GetUDPConnectionState() to drive UI.
+ */
+UENUM(BlueprintType)
+enum class EUDPConnectionState : uint8
+{
+	/** Not connected and no reconnect in progress. */
+	Disconnected  UMETA(DisplayName = "Disconnected"),
+	/** UDP_Access query is in flight or the socket is being initialised. */
+	Connecting    UMETA(DisplayName = "Connecting"),
+	/** Socket initialised and data packets are being received. */
+	Connected     UMETA(DisplayName = "Connected"),
+	/** Timeout detected — re-querying the server for a new UDP endpoint. */
+	Reconnecting  UMETA(DisplayName = "Reconnecting"),
+	/** Server is gatekeeping this client (bGateKeep = true in the response). */
+	GateKeep      UMETA(DisplayName = "Gate Kept"),
+};
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FUDPEndpointSet, bool, bSuccess, bool, bGateKeep);
@@ -108,15 +128,31 @@ public:
 	void UpdatePingTime(const int64 NewPingTime);
 	
 private:
-	
+
 	friend class UCrowdySDKSubsystem;
-	
+
+	// ── Connection state ───────────────────────────────────────────────────
+	/** Atomic so it can be read cheaply from any thread. Cast via enum. */
+	std::atomic<uint8> ConnectionState { static_cast<uint8>(EUDPConnectionState::Disconnected) };
+
+	/** Which protocol to use when InitializeUDP is called. Set from Developer Settings. */
+	ECrowdyUDPProtocol PreferredProtocol = ECrowdyUDPProtocol::Auto;
+
+	/** Read the current connection state (no game-thread requirement). */
+	EUDPConnectionState GetConnectionState() const;
+
+	/** Update the state atom — safe to call from any thread. */
+	void SetConnectionState(EUDPConnectionState NewState);
+
+	/** Called by UCrowdySDKSubsystem::TryLoadConfiguration. */
+	void SetPreferredProtocol(ECrowdyUDPProtocol Protocol);
+	// ──────────────────────────────────────────────────────────────────────
+
 	std::atomic<bool> bIsShuttingDown { false };
-	
+
 	// UDP Operations
 	std::atomic<bool> bUDPReady = false;
 	std::atomic<bool> bUDPv6Listen = false;
-	std::atomic<bool> bUDPv4Listen = false;
 	std::atomic<bool> bUDPConnected = false;
 	std::atomic<bool> bUseIPv4 = false;
 	std::atomic<bool> bAllowUdpEvents = false;
@@ -200,10 +236,6 @@ private:
 	[[nodiscard]] bool SendUDPv4(const TArray<uint8>& Message);
 	
 	void StopUDPListener();
-	
-	void StopUDPv4Listener();
-	
-	void SwitchToIPv4();
 	
 	void CleanupSockets();
 	

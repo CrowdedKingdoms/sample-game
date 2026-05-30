@@ -7,6 +7,7 @@
 #include "Core/UDP/Interfaces/ICrowdyReceptionLayer.h"
 #include "Shared/Types/Structures/Versioning/FGameVersion.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Network/UDP/CrowdyUDPSubsystem.h"   // EUDPConnectionState
 #include "CrowdySDKSubsystem.generated.h"
 
 
@@ -41,7 +42,6 @@ class FVoiceChatService;
 class UCrowdyWorkerThreadsSubsystem;
 class UCrowdyQuerySubsystem;
 class UCrowdyGameSession;
-class UCrowdyUDPSubsystem;
 class UVoiceChatSubsystem;
 class UEventPayloadType;
 
@@ -113,15 +113,48 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
 	void RequestVersionInfo() const;
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication")
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Authentication", meta=(DeprecatedFunction))
 	void SetQueryEndpoint(const FString InEndpoint) const;
 	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection", meta=(DisplayName="Start UDP Timeout Monitoring"))
+	// With these:
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Configuration")
+	void SetManagementApiUrl(const FString InUrl) const;
+
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Configuration")
+	void SetGameApiUrl(const FString InHttpUrl) const;
+	
+	/**
+	 * Returns the current UDP connection state. Poll this to drive connection
+	 * indicators in your UI — no delegates or event subscriptions required.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Connection",
+		meta=(DisplayName="Get UDP Connection State"))
+	EUDPConnectionState GetUDPConnectionState() const;
+
+	/**
+	 * @deprecated Timeout monitoring now starts automatically after the UDP
+	 * socket is initialised. Configure the threshold in Project Settings →
+	 * Plugins → Crowdy SDK → UDP Timeout (seconds).
+	 *
+	 * This function still works as a manual override (e.g. to use a different
+	 * threshold at runtime), but you no longer need to call it.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection",
+		meta=(DisplayName="Start UDP Timeout Monitoring (Deprecated)",
+		      DeprecatedFunction,
+		      DeprecationMessage="Timeout monitoring is automatic. Set UDPTimeoutSeconds in Project Settings > Plugins > Crowdy SDK instead."))
 	void StartUDPTimeoutMonitoring(const float ThresholdSeconds = 30.0f);
-	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection", meta=(DisplayName="Stop UDP Timeout Monitoring"))
+
+	/**
+	 * @deprecated Timeout monitoring is stopped automatically when the
+	 * subsystem shuts down or a reconnect cycle begins.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection",
+		meta=(DisplayName="Stop UDP Timeout Monitoring (Deprecated)",
+		      DeprecatedFunction,
+		      DeprecationMessage="Timeout monitoring is managed automatically by the SDK."))
 	void StopUDPTimeoutMonitoring();
-	
+
 	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Connection")
 	void StopNetworkOperations() const;
 	
@@ -225,6 +258,7 @@ private:
 	ICrowdyQueryTransmissionLayer* QueryTransmissionLayer;
 	
 	FTimerHandle PingMessageTimerHandle;
+	FTimerHandle HostPollTimerHandle;
 	bool bIsRegistered = false;
 	
 	UPROPERTY()
@@ -232,18 +266,29 @@ private:
 	
 	void HandleLogin(const FLoginResponse& LoginResponse) const;
 	void HandleRegister(const FRegisterResponse& RegisterResponse) const;
-	void HandleUDPAddressNotify(const FUDPAddressNotify& UDPAddressNotify) const;
+	void HandleUDPAddressNotify(const FUDPAddressNotify& UDPAddressNotify); // non-const: manages ping timer
 	void HandleVersionInfoResponse(const FVersionInfoResponse& VersionInfoResponse) const;
 	void HandleTeleportPermissionResponse(const FTeleportResponse& TeleportResponse) const;
 	bool ValidateVoiceChatSubsystem();
 	bool TryLoadConfiguration();
-	
+
+	/** Starts the repeating GameHost poll. Safe to call from any thread —
+	 *  dispatches the timer registration to the game thread internally. */
+	void StartHostPolling() const;
+
+	/** Cancels the GameHost poll timer. Must be called on the game thread. */
+	void StopHostPolling();
+
+	/** Fires the GameHost query (called by HostPollTimerHandle). */
+	UFUNCTION()
+	void PollGameHost() const;
+
 	UFUNCTION()
 	void OnUDPTimeout();
-	
+
 	UFUNCTION()
 	void OnUDPConnectionSuccessful();
-	
+
 	UFUNCTION()
 	void SendPingTestMessage();
 };

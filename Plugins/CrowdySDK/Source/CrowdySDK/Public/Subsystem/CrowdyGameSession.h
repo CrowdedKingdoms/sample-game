@@ -6,10 +6,12 @@
 #include "HAL/CriticalSection.h"
 #include "Math/MathFwd.h"
 #include "Utils/SerializationFunctionLibrary.h"
+#include <atomic>
 #include "CrowdyGameSession.generated.h"
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnOwnerUUIDUpdated, FString, NewOwnerUUID);
+
 /**
  * 
  */
@@ -36,6 +38,9 @@ struct FGameSessionInfo
 	
 	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
 	FGuid ID;
+	
+	UPROPERTY(BlueprintReadWrite, Category="Crowdy SDK|Game Session")
+	double ChunkSize = 1600.0f;
 	
 	UPROPERTY()
 	FInt64Vector CurrentPlayerChunkCoordinates = {0, 0, 0};
@@ -110,6 +115,18 @@ public:
 	UFUNCTION()
 	FInt64Vector GetPlayerCurrentChunkCoordinates() const {return GameSessionInfo.CurrentPlayerChunkCoordinates;}
 	
+	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
+	void SetChunkSize(const double ChunkSize)
+	{
+		GameSessionInfo.ChunkSize = ChunkSize;
+	}
+	
+	UFUNCTION(BlueprintPure, Category="Crowdy SDK|Game Session")
+	double GetChunkSize() const
+	{
+		return GameSessionInfo.ChunkSize;
+	}
+	
 	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetAppID() const { return GameSessionInfo.AppID;}
 	
@@ -127,7 +144,9 @@ public:
 	
 	UFUNCTION(BlueprintPure, Category = "Crowdy SDK|Game Session")
 	int64 GetGameTokenID() const {return GameSessionInfo.GameTokenID;}
-	
+
+	// ──────────────────────────────────────────────────────────────────────
+
 	UFUNCTION(BlueprintCallable, Category = "Crowdy SDK|Game Session")
 	void ClearCurrentSessionData() {GameSessionInfo.Reset();}
 	
@@ -162,10 +181,17 @@ public:
 	FEvent* GetSendEvent() const;
 	FEvent* GetReceiveEvent() const;
 private:
-	
+
 	UPROPERTY()
 	FGameSessionInfo GameSessionInfo;
+
+	UPROPERTY()
+	FGuid HostID;
 	
+	/** Atomic so it can be written from a background response thread and read
+	 *  from the game thread (or any other thread) without a lock. */
+	std::atomic<int64> HostUserID { 0 };
+
 	TQueue<TArray<uint8>, EQueueMode::Mpsc> SendQueue;
 	TQueue<TArray<uint8>, EQueueMode::Spsc> ReceiveQueue;
 	

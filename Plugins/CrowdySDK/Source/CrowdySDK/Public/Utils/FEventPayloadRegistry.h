@@ -65,7 +65,11 @@ struct FEventPayloadRegistry
 	
 	bool IsLoaded() const { return IDToStruct.Num() > 0; }
 	
+	
+
 private:
+	
 	TMap<int32, TObjectPtr<UScriptStruct>> IDToStruct;
 	TMap<const UScriptStruct*, int32> StructToID;
+
 };

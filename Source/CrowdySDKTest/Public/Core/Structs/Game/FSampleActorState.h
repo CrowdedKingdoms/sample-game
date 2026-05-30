@@ -3,7 +3,7 @@
 #include "FSampleActorState.generated.h"
 
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(CrowdyRep="ActorUpdate"))
 struct FSampleActorState
 {
 	GENERATED_BODY()

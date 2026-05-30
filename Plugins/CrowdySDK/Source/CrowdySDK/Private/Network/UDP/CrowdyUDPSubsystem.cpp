@@ -32,9 +32,8 @@ void UCrowdyUDPSubsystem::Deinitialize()
 	
 	// Signal all in-flight AsyncTasks to abort before we tear anything down
 	bIsShuttingDown = true;
-	
+
 	StopUDPListener();
-	StopUDPv4Listener();
 	CleanupSockets();
 	
 	// Clear GameSession reference so any racing lambda sees nullptr
@@ -48,16 +47,17 @@ bool UCrowdyUDPSubsystem::SendMessage(TArray<uint8>&& Message)
 {
 	if (!bAllowUdpEvents)
 		return false;
-	
+
 	TArray<uint8> OwnedBytes = MoveTemp(Message);
-	
-	if (bUseIPv4) return SendUDPv4(OwnedBytes);
-	
-	if (SendUDPv6(OwnedBytes)) return true;
-	
-	SwitchToIPv4();
-	
-	return SendUDPv4(OwnedBytes);
+
+	// Route to whichever socket was chosen during InitializeUDP.
+	// Runtime protocol switching is intentionally not supported here —
+	// if the active socket fails, the timeout monitor will detect it and
+	// trigger a clean reconnect via HandleUDPAddressNotify.
+	if (bUseIPv4)
+		return SendUDPv4(OwnedBytes);
+
+	return SendUDPv6(OwnedBytes);
 }
 
 void UCrowdyUDPSubsystem::HandleUDPMessage(const uint8* Data, const int32 Size)
@@ -98,18 +98,16 @@ void UCrowdyUDPSubsystem::HandleUDPMessage(const uint8* Data, const int32 Size)
 void UCrowdyUDPSubsystem::OnMessageReceived()
 {
 	if (bTimeoutEnabled)
-	{
 		LastMessageTime = std::chrono::steady_clock::now();
-	}
-	
+
 	if (!bUDPConnected)
 	{
-		AsyncTask(ENamedThreads::GameThread, [this] ()
+		AsyncTask(ENamedThreads::GameThread, [this]()
 		{
-			
 			if (bIsShuttingDown)
 				return;
-			
+
+			SetConnectionState(EUDPConnectionState::Connected);
 			bUDPConnected = true;
 			OnUDPConnectionSuccessful.Broadcast();
 		});
@@ -154,7 +152,9 @@ void UCrowdyUDPSubsystem::ResetUDPNetworkStats()
 
 void UCrowdyUDPSubsystem::StartTimeoutMonitoring(const float ThresholdSeconds)
 {
-	if (bTimeoutEnabled) return;
+	AsyncTask(ENamedThreads::GameThread, [this, ThresholdSeconds]()
+	{
+		if (bTimeoutEnabled) return;
 	
 	const UWorld* World = GetWorld();
 	
@@ -173,6 +173,7 @@ void UCrowdyUDPSubsystem::StartTimeoutMonitoring(const float ThresholdSeconds)
 		true);
 	
 	UE_LOG(LogTemp, Log, TEXT("UDP timeout monitoring started with threshold of %.2f seconds"), ThresholdSeconds);
+	});
 }
 
 void UCrowdyUDPSubsystem::StopTimeoutMonitoring()
@@ -209,17 +210,53 @@ void UCrowdyUDPSubsystem::UpdatePingTime(const int64 NewPingTime)
 bool UCrowdyUDPSubsystem::InitializeUDP(const FUDPAddressNotify& UDPAddressNotify)
 {
 	bUseIPv4 = false;
-	
-	if (InitializeUDPSocket(UDPAddressNotify.IPv6Address, UDPAddressNotify.Port))
-		return true;
-	
-	if (InitializeV4UDPSocket(UDPAddressNotify.IPv4Address, UDPAddressNotify.Port))
+
+	bool bInitialised = false;
+
+	switch (PreferredProtocol)
 	{
-		SwitchToIPv4();
-		return true;
+	case ECrowdyUDPProtocol::IPv4:
+		UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] UDP: protocol forced to IPv4"));
+		if (InitializeV4UDPSocket(UDPAddressNotify.IPv4Address, UDPAddressNotify.Port))
+		{
+			// InitializeV4UDPSocket already created the listener — just flag
+			// the send path to use the V4 socket.
+			bUseIPv4 = true;
+			bInitialised = true;
+		}
+		break;
+
+	case ECrowdyUDPProtocol::IPv6:
+		UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] UDP: protocol forced to IPv6"));
+		bInitialised = InitializeUDPSocket(UDPAddressNotify.IPv6Address, UDPAddressNotify.Port);
+		break;
+
+	case ECrowdyUDPProtocol::Auto:
+	default:
+		UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] UDP: protocol auto — trying IPv6 first"));
+		if (InitializeUDPSocket(UDPAddressNotify.IPv6Address, UDPAddressNotify.Port))
+		{
+			bInitialised = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] UDP: IPv6 failed, falling back to IPv4"));
+			if (InitializeV4UDPSocket(UDPAddressNotify.IPv4Address, UDPAddressNotify.Port))
+			{
+				bUseIPv4 = true;
+				bInitialised = true;
+			}
+		}
+		break;
 	}
-	
-	return false;
+
+	if (bInitialised)
+	{
+		// Allow outbound messages now that a socket is live.
+		bAllowUdpEvents = true;
+	}
+
+	return bInitialised;
 }
 
 void UCrowdyUDPSubsystem::CheckForTimeout()
@@ -252,18 +289,17 @@ void UCrowdyUDPSubsystem::CheckForTimeout()
 
 void UCrowdyUDPSubsystem::StopAllOperations()
 {
-	UE_LOG(LogTemp, Log, TEXT("Stopping all UDP operations"));
-	
+	UE_LOG(LogTemp, Log, TEXT("[CrowdySDK] UDP: stopping all operations"));
+
+	// Block outbound sends before tearing down the socket.
+	bAllowUdpEvents = false;
+
 	StopUDPListener();
-	StopUDPv4Listener();
-	
-	//if (!bTimeoutEnabled)
-	//	StopTimeoutMonitoring();
-	
 	CleanupSockets();
-	
+
 	bUDPConnected = false;
-	
+	SetConnectionState(EUDPConnectionState::Disconnected);
+
 	if (const UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(UDPStatsTimerHandle);
@@ -524,56 +560,56 @@ bool UCrowdyUDPSubsystem::SendUDPv6(const TArray<uint8>& Message)
 bool UCrowdyUDPSubsystem::SendUDPv4(const TArray<uint8>& Message)
 {
 	if (!UDPSocketV4) return false;
-	
+
 	int32 BytesSentNow = 0;
 	const bool bUDPPacketSent = UDPSocketV4->Send(Message.GetData(), Message.Num(), BytesSentNow);
-	
+
 	// Handle Stats
 	if (bUDPPacketSent && BytesSentNow > 0)
 	{
 		SentBytesThisSecond += BytesSentNow;
 		++SentDatagramsThisSecond;
 		++MessagesSentThisSecond;
-		
-		return bUDPPacketSent && BytesSentNow > 0;
+
+		return true;
 	}
-	
+
 	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
-	
+
 	if (!SocketSubsystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) packet send failed - unable to get error details"));
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) packet send failed - unable to get error details"));
 		return false;
 	}
 
 	const ESocketErrors SocketError = SocketSubsystem->GetLastErrorCode();
-	UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) packet send failed with socket error: %d"), (int32)SocketError);
-	
+	UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) packet send failed with socket error: %d"), (int32)SocketError);
+
 	switch (SocketError)
 	{
 	case SE_NO_ERROR:
-		UE_LOG(LogTemp, Warning, TEXT("UDP (IPv6) packet send completed but no bytes sent"));
+		UE_LOG(LogTemp, Warning, TEXT("UDP (IPv4) packet send completed but no bytes sent"));
 		break;
 	case SE_EWOULDBLOCK:
-		UE_LOG(LogTemp, Warning, TEXT("UDP (IPv6) send would block - socket buffer full"));
+		UE_LOG(LogTemp, Warning, TEXT("UDP (IPv4) send would block - socket buffer full"));
 		break;
 	case SE_ECONNRESET:
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) connection reset by peer"));
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) connection reset by peer"));
 		break;
 	case SE_ENETDOWN:
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) network is down"));
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) network is down"));
 		break;
 	case SE_EHOSTUNREACH:
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) host unreachable"));
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) host unreachable"));
 		break;
 	case SE_EMSGSIZE:
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) message too large"));
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) message too large"));
 		break;
 	default:
-		UE_LOG(LogTemp, Error, TEXT("UDP (IPv6) packet send failed with socket error: %d"),
+		UE_LOG(LogTemp, Error, TEXT("UDP (IPv4) packet send failed with socket error: %d"),
 			   (int32)SocketError);
 	}
-	
+
 	return false;
 }
 
@@ -604,39 +640,6 @@ void UCrowdyUDPSubsystem::StopUDPListener()
 
 
 
-void UCrowdyUDPSubsystem::StopUDPv4Listener()
-{
-	bUDPv4Listen = false;
-	
-	if (ListenerRunnable)
-	{
-		ListenerRunnable->Stop();
-	}
-
-	if (ListenerThread)
-	{
-		ListenerThread->Kill(true);
-		delete ListenerThread;
-		ListenerThread = nullptr;
-	}
-
-	if (ListenerRunnable)
-	{
-		delete ListenerRunnable;
-		ListenerRunnable = nullptr;
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("UDP IPv4 Listener Loop Stopped"));
-}
-
-void UCrowdyUDPSubsystem::SwitchToIPv4()
-{
-	bUseIPv4 = true;
-	StopUDPListener();
-	
-	ListenerRunnable = new FUDPListener(UDPSocketV4, this);
-	ListenerThread = FRunnableThread::Create(ListenerRunnable, TEXT("UDPListenerThread"), 0, TPri_AboveNormal);
-}
 
 void UCrowdyUDPSubsystem::CleanupSockets()
 {
@@ -666,4 +669,21 @@ void UCrowdyUDPSubsystem::UpdateUDPStats()
 	LastSecondSentDatagrams = SentDatagramsThisSecond.exchange(0);
 	LastSecondMessagesReceived = MessagesReceivedThisSecond.exchange(0);
 	LastSecondMessagesSent = MessagesSentThisSecond.exchange(0);
+}
+
+// ─── Connection state helpers ─────────────────────────────────────────────────
+
+EUDPConnectionState UCrowdyUDPSubsystem::GetConnectionState() const
+{
+	return static_cast<EUDPConnectionState>(ConnectionState.load(std::memory_order_relaxed));
+}
+
+void UCrowdyUDPSubsystem::SetConnectionState(const EUDPConnectionState NewState)
+{
+	ConnectionState.store(static_cast<uint8>(NewState), std::memory_order_relaxed);
+}
+
+void UCrowdyUDPSubsystem::SetPreferredProtocol(const ECrowdyUDPProtocol Protocol)
+{
+	PreferredProtocol = Protocol;
 }

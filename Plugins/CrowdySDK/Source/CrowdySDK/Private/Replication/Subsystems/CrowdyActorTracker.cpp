@@ -10,6 +10,7 @@
 #include "Subsystem/CrowdyWorkerThreadsSubsystem.h"
 #include "Utils/CrowdySDKDeveloperSettings.h"
 #include "Utils/SerializationFunctionLibrary.h"
+#include "Utils/UActorUpdatePayloadRegistry.h"
 
 void UCrowdyActorTracker::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -215,65 +216,53 @@ bool UCrowdyActorTracker::LoadDeveloperSettings()
     if (!IsValid(World))
         return false;
 
-    // Load payload types — global, not per-map
-    UActorUpdatePayloadType* ActorUpdatePayloads =
-        DeveloperSettings->ActorUpdatePayloadDataAsset.LoadSynchronous();
+	UActorUpdatePayloadRegistry::Get()->GetAllRegisteredNames(SupportedActorUpdateTypes);
+	
+	for (const auto& SupportedActorUpdateType : SupportedActorUpdateTypes)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[CrowdyActorTracker]: Supported actor update type: %s"), *SupportedActorUpdateType.ToString());
+	}
 
-    if (!IsValid(ActorUpdatePayloads) || ActorUpdatePayloads->Entries.IsEmpty())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorTracker]: No valid actor update payload entries found."));
-        return false;
-    }
-
-    for (const auto& Entry : ActorUpdatePayloads->Entries)
-    {
-        if (Entry.ActorUpdateName.IsValid())
-            SupportedActorUpdateTypes.Add(Entry.ActorUpdateName);
-    }
-
-    FString CurrentMap = FPackageName::GetShortName(World->GetOutermost()->GetName());
+	FString CurrentMap = FPackageName::GetShortName(World->GetOutermost()->GetName());
 
 #if WITH_EDITOR
-    if (World->WorldType == EWorldType::Editor || World->WorldType == EWorldType::PIE)
-        CurrentMap = World->RemovePIEPrefix(CurrentMap);
+	if (World->WorldType == EWorldType::Editor || World->WorldType == EWorldType::PIE)
+		CurrentMap = World->RemovePIEPrefix(CurrentMap);
 #endif
 
-    for (const auto& [WorldPtr, ConfigAssetPtr] : DeveloperSettings->ActorManagementConfigs)
-    {
-        if (WorldPtr.IsNull())
-            continue;
+	for (const auto& [WorldPtr, ConfigAssetPtr] : DeveloperSettings->ActorManagementConfigs)
+	{
+		if (WorldPtr.IsNull()) continue;
 
-        const FString AllowedMap = FPackageName::GetShortName(WorldPtr.GetAssetName());
-        if (AllowedMap != CurrentMap)
-            continue;
+		const FString AllowedMap = FPackageName::GetShortName(WorldPtr.GetAssetName());
+		if (AllowedMap != CurrentMap) continue;
 
-        const UCrowdyActorManagementConfig* ConfigAsset = ConfigAssetPtr.LoadSynchronous();
-        if (!IsValid(ConfigAsset))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorTracker]: Config asset for map '%s' is invalid."), *CurrentMap);
-            return false;
-        }
+		const UCrowdyActorManagementConfig* ConfigAsset = ConfigAssetPtr.LoadSynchronous();
+		if (!IsValid(ConfigAsset))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[CrowdyActorTracker]: Config asset for map '%s' is invalid."), *CurrentMap);
+			return false;
+		}
 
-        const FCrowdyActorManagementConfigStruct& Config = ConfigAsset->Config;
+		const FCrowdyActorManagementConfigStruct& Config = ConfigAsset->Config;
+		if (!Config.bUseCrowdyActorTracker) return false;
 
-        if (!Config.bUseCrowdyActorTracker)
-            return false;
+		Configure(
+			Config.MaxTrackedActors,
+			Config.MaxUpdatesPerBatch,
+			Config.MaxBatchWaitTime,
+			Config.ActorTimeoutThreshold
+		);
 
-        Configure(
-            Config.MaxTrackedActors,
-            Config.MaxUpdatesPerBatch,
-            Config.MaxBatchWaitTime,
-            Config.ActorTimeoutThreshold
-        );
+		ToggleOwnerTracking(Config.bEnableOwnerTracking);
+		ToggleBroadcastUpdatesToGameThread(Config.bDispatchUpdatesOnGameThread);
+		return true;
+	}
 
-        ToggleOwnerTracking(Config.bEnableOwnerTracking);
-        ToggleBroadcastUpdatesToGameThread(Config.bDispatchUpdatesOnGameThread);
-
-        return true;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[CrowdyActorTracker]: Map '%s' is not in the allowed levels list."), *CurrentMap);
-    return false;
+	UE_LOG(LogTemp, Warning,
+		TEXT("[CrowdyActorTracker]: Map '%s' is not in the allowed levels list."), *CurrentMap);
+	return false;
 }
 
 void UCrowdyActorTracker::ProcessQueue(int32 WorkerIndex)
@@ -348,24 +337,24 @@ void UCrowdyActorTracker::ProcessQueue(int32 WorkerIndex)
         
         if (!SpawnBatch.IsEmpty())
         {
-            UE::Tasks::Launch(UE_SOURCE_LOCATION,
-                [this, SpawnBatch = MoveTemp(SpawnBatch)]()
-                {
-                    for (const FCrowdyActorUpdate& Update : SpawnBatch)
-                    {
-                        ++NumOfTrackedActors;
-                        OnNewPlayerJoined.Broadcast(Update.UUID, Update.State, NumOfTrackedActors.load());
-                    }
-                    
-                    for (const FCrowdyActorUpdate& Update : SpawnBatch)
-                    {
-                        PendingSpawns->Remove(Update.UUID);
-                        TrackedUUIDs->Add(Update.UUID);
-                    }
-                },
-                LowLevelTasks::ETaskPriority::Normal,
-                UE::Tasks::EExtendedTaskPriority::GameThreadNormalPri
-            );
+        	// Capture batch by value — safe to read from GT
+        	AsyncTask(ENamedThreads::GameThread,
+				[this, SpawnBatch = MoveTemp(SpawnBatch)]()
+				{
+					// Now truly on the game thread — GC locked, UObjects safe
+					for (const FCrowdyActorUpdate& Update : SpawnBatch)
+					{
+						const int32 Count = ++NumOfTrackedActors;
+						OnNewPlayerJoined.Broadcast(Update.UUID, Update.State, Count + 1);
+					}
+
+					for (const FCrowdyActorUpdate& Update : SpawnBatch)
+					{
+						PendingSpawns->Remove(Update.UUID);
+						TrackedUUIDs->Add(Update.UUID);
+					}
+				}
+			);
         }
     }
 	
@@ -404,7 +393,6 @@ void UCrowdyActorTracker::CheckTimeouts()
 
 void UCrowdyActorTracker::ProcessTimedOutActors(TArray<FGuid> TimedOut)
 {
-	// No IsValid(this) check needed — subsystem outlives all levels
 	for (const FGuid& UUID : TimedOut)
 	{
 		TrackedUUIDs->Remove(UUID);
@@ -412,14 +400,18 @@ void UCrowdyActorTracker::ProcessTimedOutActors(TArray<FGuid> TimedOut)
 		--NumOfTrackedActors;
 	}
 
-	UE::Tasks::Launch(UE_SOURCE_LOCATION,
-		[this, TimedOut = MoveTemp(TimedOut)]()
+	const int32 Count = NumOfTrackedActors.load();
+
+	FFunctionGraphTask::CreateAndDispatchWhenReady(
+		[this, TimedOut = MoveTemp(TimedOut), Count]()
 		{
+			check(IsInGameThread());
 			for (const FGuid& UUID : TimedOut)
-				OnPlayerLeft.Broadcast(UUID, NumOfTrackedActors.load());
+				OnPlayerLeft.Broadcast(UUID, Count + 1);
 		},
-		LowLevelTasks::ETaskPriority::Normal,
-		UE::Tasks::EExtendedTaskPriority::GameThreadNormalPri
+		TStatId{},
+		nullptr,
+		ENamedThreads::GameThread
 	);
 }
 

@@ -96,10 +96,13 @@ void UCrowdyActorUpdateComponent::SetupID()
 			if (PC->IsLocalController() && PC->IsPrimaryPlayer())
 			{
 				bIsOwnerPlayer = true;
+				
 				if (bUseDeterministicID)
 					UUID = UHelperFunctions::GetDeterministicID(GameSession->GetUserID()).ToString(EGuidFormats::Digits);
 				else
 					UUID = UHelperFunctions::GetNewUUID();
+				
+				ID = USerializationFunctionLibrary::ToGuid(UUID);
 				GameSession->SetUUID(UUID);
 			}
 		}
@@ -108,9 +111,12 @@ void UCrowdyActorUpdateComponent::SetupID()
 	if (!bIsOwnerPlayer && bUseDeterministicID)
 	{
 		UUID = UHelperFunctions::GetDeterministicID(Seed).ToString(EGuidFormats::Digits);
+		ID = USerializationFunctionLibrary::ToGuid(UUID);
 	}
 	else if (!bIsOwnerPlayer)
 	{
 		UUID = UHelperFunctions::GetNewUUID();
+		ID = USerializationFunctionLibrary::ToGuid(UUID);
 	}
+	
 }

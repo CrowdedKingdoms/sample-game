@@ -1,7 +1,9 @@
 ﻿// EventPayloadType.cpp
 
 #include "Data/EventPayloadType.h"
-#include "Messages/GameObjects/FCrowdyObjectSpawnEvent.h"
+
+#include "Messages/Events/FCrowdySelectIDAsHost.h"
+#include "Messages/GameObjects/FCrowdyEntitySpawnEvent.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -30,24 +32,29 @@ UEventPayloadType::UEventPayloadType()
 void UEventPayloadType::BuildInternalEntries()
 {
 	InternalEntries.Reset();
-
+	
+	InternalEntries.Add(
+		MakeEntry(46, 
+			"SelectHost", 
+			FCrowdySelectIDAsHost::StaticStruct()));
+	
 	InternalEntries.Add(
 		MakeEntry(
 			47,
 			"CreateCrowdyGameObject",
-			FCrowdyObjectSpawnEvent::StaticStruct()));
+			FCrowdyEntitySpawnEvent::StaticStruct()));
 
 	InternalEntries.Add(
 		MakeEntry(
 			49,
 			"DestroyCrowdyGameObject",
-			FCrowdyObjectDestroyEvent::StaticStruct()));
+			FCrowdyEntityDestroyEvent::StaticStruct()));
 
 	InternalEntries.Add(
 		MakeEntry(
 			48,
 			"ChangeCrowdyGameObjectState",
-			FCrowdyObjectStateEvent::StaticStruct()));
+			FCrowdyEntityStateEvent::StaticStruct()));
 }
 
 TArray<FEventPayloadTypeEntry> UEventPayloadType::GetAllEntries() const

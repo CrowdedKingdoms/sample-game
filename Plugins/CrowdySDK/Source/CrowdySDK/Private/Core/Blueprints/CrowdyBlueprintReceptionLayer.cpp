@@ -41,7 +41,7 @@ UCrowdyBlueprintReceptionLayer* UCrowdyBlueprintReceptionLayer::CreateAndRegiste
 	
 	Layer->Initialize(Subsystem);
 	Layer->RegisterLayer();
-
+	//Layer->AddToRoot();
 	return Layer;
 }
 

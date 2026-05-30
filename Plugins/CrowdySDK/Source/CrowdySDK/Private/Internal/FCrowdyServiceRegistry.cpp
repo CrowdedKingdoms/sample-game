@@ -16,7 +16,28 @@ void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer
 	
 	if (!Layer) return;
 
-	const auto& SubscribedEvents = Layer->GetSupportedEventTypes();
+	auto SubscribedEvents = Layer->GetSupportedEventTypes();
+	
+	const auto SubscribedStructs = Layer->GetSupportedEvents();
+	
+	if (!SubscribedStructs.IsEmpty())
+	{
+		SubscribedEvents.Reserve(SubscribedStructs.Num());
+		
+		for (auto SubscribedEvent : SubscribedStructs)
+		{
+			FCrowdyTypeID ID;
+			if (!UEventPayloadRegistry::Get()->GetID(SubscribedEvent, ID))
+				continue;
+			
+			FName EventName;
+			if (!UEventPayloadRegistry::Get()->GetName(ID, EventName))
+				continue;
+			
+			SubscribedEvents.AddUnique(EventName);
+		}
+	}
+	
 	const auto& SubscribedActorUpdates = Layer->GetSupportedActorUpdateTypes();
 	const auto& SupportedTypes = Layer->GetSupportedResponseTypes();
 	const bool bHasSubscriptions = !SubscribedEvents.IsEmpty() || !SubscribedActorUpdates.IsEmpty();
@@ -74,11 +95,11 @@ void FCrowdyServiceRegistry::RegisterReceptionLayer(ICrowdyReceptionLayer* Layer
 
 void FCrowdyServiceRegistry::DeregisterAllReceptionLayers()
 {
-	ReceptionLayersByType.Empty();
-	UnfilteredEventLayers.Empty();
-	SubscribedEventLayers.Empty();
-	SubscribedActorUpdateLayers.Empty();
-	UnfilteredActorUpdateLayers.Empty();
+	ReceptionLayersByType.Reset();
+	UnfilteredEventLayers.Reset();
+	SubscribedEventLayers.Reset();
+	SubscribedActorUpdateLayers.Reset();
+	UnfilteredActorUpdateLayers.Reset();
 	UE_LOG(LogTemp, Log, TEXT("Deregistered all reception layers."));
 }
 
@@ -197,10 +218,9 @@ void FCrowdyServiceRegistry::DispatchActorUpdateNotification(
 		return;
 	}
 	
-	uint8 ActorUpdateID;
 	FName ActorUpdateName;
-	UActorUpdatePayloadRegistry::Get()->GetID(ActorUpdateMessage.State.GetScriptStruct(), ActorUpdateID);
-	UActorUpdatePayloadRegistry::Get()->GetName(ActorUpdateID, ActorUpdateName);
+	
+	if (UActorUpdatePayloadRegistry::Get()->GetName(ActorUpdateMessage.State.GetScriptStruct(), ActorUpdateName))
 
 	if (const TArray<ICrowdyReceptionLayer*>* SubscribedLayers = SubscribedActorUpdateLayers.Find(ActorUpdateName))
 	{

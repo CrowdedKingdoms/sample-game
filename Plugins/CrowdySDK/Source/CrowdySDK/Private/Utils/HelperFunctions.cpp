@@ -2,16 +2,42 @@
 
 
 #include "Utils/HelperFunctions.h"
-
-#include "Replication/Components/CrowdyObjectComponent.h"
-#include "Replication/Subsystems/CrowdyObjectManager.h"
+#include "Replication/Subsystems/CrowdyEntityManager.h"
 #include "Subsystem/CrowdyGameSession.h"
 #include "Subsystem/CrowdySDKSubsystem.h"
 
 
+void UHelperFunctions::GetChunkCoordinateAtLocation(UObject* WorldContextObject, const FVector& WorldLocation,
+	int64& ChunkX, int64& ChunkY, int64& ChunkZ)
+{
+	if (!IsValid(WorldContextObject))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[HelperFunctions]: WorldContextObject is null."));
+		return;
+	}
+	
+	const UWorld* World = WorldContextObject->GetWorld();
+	
+	if (!IsValid(World))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[HelperFunctions]: World is null."));
+		return;
+	}
+
+	const TObjectPtr<UCrowdyGameSession> GameSession = World->GetGameInstance()->GetSubsystem<UCrowdyGameSession>();
+	
+	const double ChunkSize = GameSession->GetChunkSize();
+	
+	ChunkX = static_cast<int64>(FMath::FloorToDouble(WorldLocation.X / ChunkSize));
+	ChunkY = static_cast<int64>(FMath::FloorToDouble(WorldLocation.Y / ChunkSize));
+	ChunkZ = static_cast<int64>(FMath::FloorToDouble(WorldLocation.Z / ChunkSize));
+	
+}
+
 void UHelperFunctions::GetChunkCoordinatesAtWorldLocation(const FVector& WorldLocation, int64& ChunkX, int64& ChunkY,
                                                           int64& ChunkZ)
 {
+	
 	constexpr double ChunkSize = 1600.0f;
 	
 	ChunkX = static_cast<int64>(FMath::FloorToDouble(WorldLocation.X / ChunkSize));
@@ -60,22 +86,3 @@ FGuid UHelperFunctions::GetNewID()
 {
 	return FGuid::NewGuid();
 }
-
-void UHelperFunctions::DispatchEventForObject(UObject* WorldContextObject, const AActor* Object,
-                                              FInstancedStruct EventPayload)
-{
-	if (!IsValid(WorldContextObject)) return;
-	
-	if (!IsValid(Object)) return;
-
-	if (!IsValid(EventPayload.GetScriptStruct()))
-		return;
-
-	const UCrowdyObjectComponent* ObjectComponent = Cast<UCrowdyObjectComponent>(Object->GetComponentByClass(UCrowdyObjectComponent::StaticClass()));
-	
-	if (!IsValid(ObjectComponent))
-		return;
-	
-	ObjectComponent->DispatchEventForObject(EventPayload);
-}
-

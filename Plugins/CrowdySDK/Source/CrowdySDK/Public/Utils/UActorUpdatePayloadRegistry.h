@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/FCrowdyTypeID.h"
 #include "Data/ActorUpdatePayloadType.h"
 #include "UObject/Object.h"
 #include "UActorUpdatePayloadRegistry.generated.h"
@@ -39,31 +40,40 @@ public:
 	}
 	
 	void LoadFromDataAsset(const UActorUpdatePayloadType* DataAsset);
-	bool GetID(const UScriptStruct* Struct, uint8& OutID) const;
-	bool GetName(uint8 ID, FName& OutName) const;
-	UScriptStruct* Resolve(uint8 ID) const;
-	
-	bool IsLoaded() const { return bLoaded.load(std::memory_order_acquire); }
-	
+	bool GetID(const UScriptStruct* Struct, FCrowdyTypeID& OutID) const;
+	bool GetName(const UScriptStruct* Struct, FName& OutName) const;
+	UScriptStruct* Resolve(const FCrowdyTypeID OutID) const;
+
 	void Reset()
 	{
 		ensure(IsInGameThread());
 		IDToStruct.Reset();
-		StructToID.Reset();
+		StructPathToID.Reset();
 		IDToName.Reset();
 		bLoaded.store(false, std::memory_order_release);
 	}
 	
+	void RegisterStruct(UScriptStruct* Struct, FCrowdyTypeID TypeID);
+
+	void Seal();
+
+	bool IsSealed() const
+	{
+		return bSealed.load(std::memory_order_acquire);
+	}
+	
+    void GetAllRegisteredNames(TArray<FName>& OutNames) const;
+	
 private:
 	
-	UPROPERTY()
-	TMap<uint8, TObjectPtr<UScriptStruct>> IDToStruct;
-
-	UPROPERTY()
-	TMap<const UScriptStruct*, uint8> StructToID;
 	
-	TMap<int32, FName> IDToName;
+	TMap<FCrowdyTypeID, TObjectPtr<UScriptStruct>> IDToStruct;
+	
+	TMap<FName, FCrowdyTypeID> StructPathToID;
+	
+	TMap<FCrowdyTypeID, FName> IDToName;
 	
 	std::atomic<bool> bLoaded { false };
 	static std::atomic<UActorUpdatePayloadRegistry*> Instance;
+	std::atomic<bool> bSealed { false };
 };

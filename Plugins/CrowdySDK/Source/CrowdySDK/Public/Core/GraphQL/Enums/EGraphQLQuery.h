@@ -49,4 +49,10 @@ enum class EGraphQLQuery : uint8
 	// User State
 	UpdateUserState UMETA(DisplayName = "Update User State Query"),
 	GetUserState	UMETA(DisplayName = "Get User State Query"),
+
+	// Game Host
+	GameHost		UMETA(DisplayName = "Game Host Query"),
+
+	// Persistence system (inline query body — no data-asset entry needed)
+	PersistencePull UMETA(DisplayName = "Persistence Pull Query"),
 };

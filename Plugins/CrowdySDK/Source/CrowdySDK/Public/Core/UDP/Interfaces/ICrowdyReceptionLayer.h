@@ -61,7 +61,13 @@ public:
 	}
 	
 	// New function to allow selected dispatch of events
+	UE_DEPRECATED(5.8, "Override GetSupportedEvents Instead and return an array of UScriptStructs*")
 	virtual TArray<FName> GetSupportedEventTypes() const
+	{
+		return {};
+	}
+	
+	virtual TArray<UScriptStruct*> GetSupportedEvents() const
 	{
 		return {};
 	}

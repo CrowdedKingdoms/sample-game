@@ -174,7 +174,7 @@ void UCrowdyAutoReplicator::ReplicationLoop()
 
 		const FVector3f NewPos = FVector3f(Comp->GetCachedOwner()->GetActorLocation());
 		Data.Positions[i]    = NewPos;
-		UHelperFunctions::GetChunkCoordinatesAtWorldLocation(FVector(NewPos), Data.Chunks[i].X, Data.Chunks[i].Y, Data.Chunks[i].Z);
+		UHelperFunctions::GetChunkCoordinateAtLocation(this,FVector(NewPos), Data.Chunks[i].X, Data.Chunks[i].Y, Data.Chunks[i].Z);
 		
 		
 		CrowdySDK->DispatchActorUpdate(Data.Chunks[i].X, Data.Chunks[i].Y, Data.Chunks[i].Z, 

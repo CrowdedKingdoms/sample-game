@@ -16,7 +16,11 @@ class CROWDYSDK_API UHelperFunctions : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 public:
 	
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Coordinates")
+	UFUNCTION(BlueprintPure, Category = "CrowdySDK|Coordinates", meta = (DisplayName = "Get Chunk Coordinate At Location", WorldContext="WorldContextObject"))
+	static void GetChunkCoordinateAtLocation(UObject* WorldContextObject, const FVector& WorldLocation, int64& ChunkX, int64& ChunkY, int64& ChunkZ);
+	
+	UE_DEPRECATED(5.8, TEXT("Use Get Chunk Coordinate At Location instead"))
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Coordinates", meta = (DeprecatedFunction, DeprecationMessage = "Use Get Chunk Coordinate At Location instead"))
 	static void GetChunkCoordinatesAtWorldLocation(const FVector& WorldLocation, int64& ChunkX, int64& ChunkY, int64& ChunkZ);
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Coordinates")
@@ -30,8 +34,4 @@ public:
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CrowdySDK|Identifiers")
 	static FGuid GetNewID();
-	
-	UFUNCTION(BlueprintCallable, Category = "CrowdySDK|Utility Functions", meta=(WorldContext="WorldContextObject"))
-	static void DispatchEventForObject(UObject* WorldContextObject, const AActor* Object, FInstancedStruct EventPayload);
-	
 };

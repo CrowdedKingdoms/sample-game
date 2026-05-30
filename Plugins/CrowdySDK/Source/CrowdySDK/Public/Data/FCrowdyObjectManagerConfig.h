@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "CoreMinimal.h"
-#include "Replication/ObjectHandler/CrowdyObjectEventHandler.h"
+#include "Replication/ObjectHandler/CrowdyEntityEventHandler.h"
 #include "FCrowdyObjectManagerConfig.generated.h"
 
 USTRUCT(BlueprintType)
@@ -17,7 +17,7 @@ struct FCrowdyObjectHandlerBinding
 
 	// Class ref instead of instanced object — survives config serialization
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Crowdy SDK|Object Management")
-	TSoftClassPtr<UCrowdyObjectEventHandler> HandlerClass;
+	TSoftClassPtr<UCrowdyEntityEventHandler> HandlerClass;
 };
 
 USTRUCT(BlueprintType)

@@ -22,4 +22,6 @@ enum EQueryResponseType: uint8
 	VersionInfo,
 	UpdateUserState,
 	GetUserState,
+	GameHost,
+	PersistencePull,
 };

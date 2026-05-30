@@ -4,7 +4,7 @@
 #include "FChangeAnimState.generated.h"
 
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(CrowdyRep="Event"))
 struct FChangeAnimState
 {
 	GENERATED_BODY()

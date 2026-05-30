@@ -27,12 +27,13 @@ public class CrowdySDK : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core", 
-				"CKSharedTypes", 
-				"OpenSSL", 
-				"Json", 
-				"JsonUtilities", 
+				"Core",
+				"CKSharedTypes",
+				"OpenSSL",
+				"Json",
+				"JsonUtilities",
 				"HTTP",
+				"WebSockets",
 				"AudioCapture",
 				"UELibSampleRate",
 				"libOpus",
