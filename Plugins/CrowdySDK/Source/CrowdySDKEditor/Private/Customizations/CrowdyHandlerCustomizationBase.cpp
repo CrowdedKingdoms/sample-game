@@ -12,7 +12,7 @@
 
 namespace
 {
-	bool IsCrowdyPayloadPin(const UEdGraphPin* Pin)
+	bool IsCrowdyHandlerPayloadPin(const UEdGraphPin* Pin)
 	{
 		if (!Pin) return false;
 		if (Pin->ParentPin) return false;
@@ -222,7 +222,7 @@ FCrowdyHandlerCustomizationBase::InspectPins() const
 
 	for (const UEdGraphPin* Pin : GetNodePins())
 	{
-		if (!IsCrowdyPayloadPin(Pin)) continue;
+		if (!IsCrowdyHandlerPayloadPin(Pin)) continue;
 
 		++Result.InputPinCount;
 
