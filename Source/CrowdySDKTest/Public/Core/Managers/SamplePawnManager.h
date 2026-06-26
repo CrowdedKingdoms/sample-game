@@ -4,17 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Replication/Interfaces/CrowdyEventReceiver.h"
 #include "SamplePawnManager.generated.h"
 
 struct FChangeAnimState;
-class UCrowdyActorPoolSubsystem;
 enum class ESampleAnimState : uint8;
 
 UCLASS(BlueprintType)
 
 // Just add this interface "ICrowdyEventReceiver", so the registry can detect this actor for event reception
-class CROWDYSDKTEST_API ASamplePawnManager : public AActor, public ICrowdyEventReceiver 
+class CROWDYSDKTEST_API ASamplePawnManager : public AActor
 {
 	GENERATED_BODY()
 
@@ -29,7 +27,7 @@ public:
 	// Marking this event as Crowdy Event so that it can be picked up by the registry at runtime. 
 	// Currently, there is no filtering for actors, so that has to be done manually. We currently include the Actor Identification data 
 	// in the payload and the manually check against it in the function definition.
-	UFUNCTION(meta=(CrowdyEvent))
+	UFUNCTION()
 	void ChangeInstanceAnimation(const FChangeAnimState& NewAnimState);
 	
 protected:

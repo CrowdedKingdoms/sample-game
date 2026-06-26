@@ -30,14 +30,13 @@ void ASamplePawnManager::Tick(float DeltaTime)
 void ASamplePawnManager::ChangeInstanceAnimation(const FChangeAnimState& NewAnimState)
 {
 	bool bIsValid = false;
-	AActor* Actor = UCrowdyUtilities::FindCrowdyActor(this, NewAnimState.TargetID, bIsValid);
 	
 	if (!bIsValid)
 	{
 		return;
 	}
 	
-	IReplicatedActor::Execute_ChangeAnimationState(Actor, NewAnimState.NewState);
+	IReplicatedActor::Execute_ChangeAnimationState(this, NewAnimState.NewState);
 }
 
 

@@ -50,6 +50,7 @@
 *.sdf
 *.VC.db
 *.VC.opendb
+*.slnx
 
 # Precompiled Assets
 SourceArt/**/*.png
@@ -101,6 +102,8 @@ DerivedDataCache/*
 /DerivedDataCache
 /Intermediate
 /Saved
+/Plugins/**/Docs/*
+/Content/CrowdySDK/CrowdyBakedRegistry.uasset
 
 #################################
 # Visual Studio Generated Files #

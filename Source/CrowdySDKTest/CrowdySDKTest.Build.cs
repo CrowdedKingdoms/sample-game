@@ -8,9 +8,20 @@ public class CrowdySDKTest : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "CrowdySDK" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		// The sample calls into several CrowdySDK plugin modules:
+		//   CrowdySDK - the game-instance subsystem (login, voice)
+		//   CrowdyReplication - entity component, executor, RPC macro, actor tracker, settings
+		//   CrowdyServices - utilities, teams, persistence
+		//   CrowdyNet - the routing enums (recipient, decay, distance)
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"CrowdySDK",
+			"CrowdyReplication",
+			"CrowdyServices",
+			"CrowdyNet",
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
