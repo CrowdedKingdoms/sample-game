@@ -137,7 +137,7 @@ void ASampleChannelSwitch::SendAnnounce()
 {
 	// Pass the values straight in. No payload struct, no manual serialization.
 	const TArray<int32> Scores = {10, 20, 30};
-	Announce(Message, ESampleAnimState::Walk, Scores, Icon);
+	Announce(Message, static_cast<uint8>(1), Scores, Icon);
 }
 
 void ASampleChannelSwitch::HandleChannelError(FCrowdyTeamError Error, FString InMessage)
@@ -145,8 +145,8 @@ void ASampleChannelSwitch::HandleChannelError(FCrowdyTeamError Error, FString In
 	UE_LOG(LogCrowdySampleChannel, Warning, TEXT("Channel provisioning failed: %s"), *InMessage);
 }
 
-void ASampleChannelSwitch::Announce_Implementation(const FString& InMessage, ESampleAnimState InMood,
-	const TArray<int32>& InScores, TSubclassOf<AActor> InIcon)
+void ASampleChannelSwitch::Announce_Implementation(const FString& InMessage, uint8 InMood,
+                                                   const TArray<int32>& InScores, TSubclassOf<AActor> InIcon)
 {
 	UE_LOG(LogCrowdySampleChannel, Log, TEXT("Announce: \"%s\" (mood %d, %d scores)"),
 		*InMessage, static_cast<int32>(InMood), InScores.Num());

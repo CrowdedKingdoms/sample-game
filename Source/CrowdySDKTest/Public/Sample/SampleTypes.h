@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Core/Enums/ESampleAnimState.h"
 #include "SampleTypes.generated.h"
 
 // Shared data the sample examples pass around.
@@ -29,8 +28,14 @@ struct FSampleEntityState
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
 	FRotator Rotation = FRotator::ZeroRotator;
 
+	// The raw inputs the AnimBP already consumes. We replicate the cause (movement),
+	// not the effect (a classified anim state), so the proxy's AnimBP recomputes
+	// GroundSpeed/Direction/ShouldMove exactly as the owner does.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
-	ESampleAnimState Anim = ESampleAnimState::Idle;
+	FVector Velocity = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
+	bool bIsFalling = false;
 };
 
 /**

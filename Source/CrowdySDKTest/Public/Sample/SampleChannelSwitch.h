@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Core/Enums/ESampleAnimState.h"
 #include "Replication/RPC/CrowdyEvent.h"
 #include "Sample/SampleSwitchBase.h"
 #include "Queries/Data/Teams/Types/FCrowdyGroup.h"
@@ -36,8 +35,8 @@ public:
 	ASampleChannelSwitch();
 
 	UFUNCTION(meta=(CrowdyEvent, CrowdyRecipient="Multicast", CrowdyChannel="SampleWorldChat"))
-	void Announce_Implementation(const FString& InMessage, ESampleAnimState InMood,
-		const TArray<int32>& InScores, TSubclassOf<AActor> InIcon);
+	void Announce_Implementation(const FString& InMessage, uint8 InMood,
+	                             const TArray<int32>& InScores, TSubclassOf<AActor> InIcon);
 	CROWDY_EVENT(Announce)
 
 protected:
@@ -46,8 +45,8 @@ protected:
 
 	// Hook the visible reaction here so the same received event drives a Blueprint.
 	UFUNCTION(BlueprintImplementableEvent, Category="Sample")
-	void OnAnnounceReceived(const FString& InMessage, ESampleAnimState InMood,
-		const TArray<int32>& InScores, TSubclassOf<AActor> InIcon);
+	void OnAnnounceReceived(const FString& InMessage, uint8 InMood,
+	                        const TArray<int32>& InScores, TSubclassOf<AActor> InIcon);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
 	FString Message = TEXT("Hello from the channel");

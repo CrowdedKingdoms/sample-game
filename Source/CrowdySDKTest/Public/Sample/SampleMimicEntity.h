@@ -2,22 +2,21 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Sample/SampleMirrorSource.h"
 #include "SampleMimicEntity.generated.h"
 
 class UCrowdyEntityComponent;
-class USkeletalMeshComponent;
 
 /**
- * A live "front mirror" of the player, spawned as a Dynamic Crowdy entity. It wears the
- * player's mannequin (set as a class default so every copy — the owner and the pooled
- * remote proxies alike — shows it without a runtime payload, which the actor pool would
- * otherwise drop). The owner moves it to the mirrored transform of its target pawn every
- * frame; the Dynamic executor snapshots that transform and the SDK replicates it, so the
- * reflection follows the player on every client. Mirroring is done with
- * UMathOperations::GetMimicTransform across a fixed plane captured at spawn.
+ * An invisible "front mirror" source. Spawned locally as a Dynamic Crowdy entity, it has
+ * no mesh of its own: each frame the owner moves it to the mirrored transform of its
+ * target pawn, and USampleMimicExecutor streams that as the same FSampleEntityState the
+ * player streams. Remote clients (and the owner's own round-trip) spawn the character
+ * proxy from that struct, so the reflection looks and animates like the player. Mirroring
+ * is done with UMathOperations::GetMimicTransform across a fixed plane captured at spawn.
  */
 UCLASS()
-class CROWDYSDKTEST_API ASampleMimicEntity : public AActor
+class CROWDYSDKTEST_API ASampleMimicEntity : public AActor, public ISampleMirrorSource
 {
 	GENERATED_BODY()
 
@@ -34,15 +33,17 @@ public:
 		MirrorPlane = InMirrorPlane;
 	}
 
+	// ISampleMirrorSource which is read by USampleMimicExecutor to pull the real character's
+	// movement and the plane to reflect it across.
+	virtual APawn* GetMirrorTarget_Implementation() const override { return MimicTarget.Get(); }
+	virtual FTransform GetMirrorPlaneTransform_Implementation() const override { return MirrorPlane; }
+
 protected:
 
 	virtual void Tick(float DeltaSeconds) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Sample")
 	TObjectPtr<UCrowdyEntityComponent> CrowdyEntity;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Sample")
-	TObjectPtr<USkeletalMeshComponent> Mesh;
 
 	// Pushes the reflection this far along the mirror normal. 0 is a true mirror; a small
 	// positive value pulls the reflection off the plane so it never clips the player.

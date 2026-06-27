@@ -20,10 +20,19 @@ protected:
 
 	virtual void Interact_Implementation(APawn* Interactor) override;
 
-	// The entity spawned as the reflection. Defaults to ASampleMimicEntity, which wears
-	// the interacting player's appearance, so the raw C++ class already looks like you.
+	// The invisible "puppeteer" spawned locally to drive the reflection. It only sources
+	// the mirrored state stream, it is never what other clients see.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
 	TSubclassOf<ASampleMimicEntity> MimicClass;
+
+	// The actor the pool should spawn on every client for the reflection your player
+	// character (e.g., BP_ThirdPersonCharacter). The mimic streams FSampleEntityState, so
+	// this must be the same class your player pawn maps that struct to. Leave it unset to
+	// fall back to MimicClass.
+	// This is only needed to set for this complex example, 
+	// in the normal development you'd never have to set proxy classes when using Actor Pool System within Crowdy SDK
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Sample")
+	TSubclassOf<AActor> ProxyClass;
 
 private:
 

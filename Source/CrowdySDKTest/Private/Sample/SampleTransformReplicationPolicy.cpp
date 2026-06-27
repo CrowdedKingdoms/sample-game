@@ -1,5 +1,7 @@
 #include "Sample/SampleTransformReplicationPolicy.h"
 
+#include "GameFramework/Actor.h"
+#include "Sample/SampleAnimReceiver.h"
 #include "Sample/SampleTypes.h"
 
 bool USampleTransformReplicationPolicy::ExtractFields(const FInstancedStruct& State, int64 ServerTimestampMs, int32 SlotId)
@@ -11,6 +13,8 @@ bool USampleTransformReplicationPolicy::ExtractFields(const FInstancedStruct& St
 	EnsureSlot(SlotId);
 	Positions[SlotId].Push(S.Location, ServerTimestampMs);
 	Rotations[SlotId].Push(S.Rotation, ServerTimestampMs);
+	Velocities[SlotId] = S.Velocity;
+	Falling[SlotId] = S.bIsFalling;
 	return true;
 }
 
@@ -33,12 +37,21 @@ void USampleTransformReplicationPolicy::ApplyToActor(AActor* Actor, int32 SlotId
 		});
 
 	Actor->SetActorLocationAndRotation(Pos, Rot);
+
+	// Hand the latched movement inputs to the proxy character. Its AnimBP reads these
+	// (via AnimVelocity / bAnimFalling) instead of the non-simulating movement component.
+	if (Actor->Implements<USampleAnimReceiver>() && Velocities.IsValidIndex(SlotId))
+	{
+		ISampleAnimReceiver::Execute_ApplyAnimSnapshot(Actor, Velocities[SlotId], Falling[SlotId]);
+	}
 }
 
 void USampleTransformReplicationPolicy::OnInstanceDeactivated(int32 SlotId)
 {
 	if (Positions.IsValidIndex(SlotId)) Positions[SlotId] = {};
 	if (Rotations.IsValidIndex(SlotId)) Rotations[SlotId] = {};
+	if (Velocities.IsValidIndex(SlotId)) Velocities[SlotId] = FVector::ZeroVector;
+	if (Falling.IsValidIndex(SlotId)) Falling[SlotId] = false;
 }
 
 void USampleTransformReplicationPolicy::EnsureSlot(int32 SlotId)
@@ -47,5 +60,7 @@ void USampleTransformReplicationPolicy::EnsureSlot(int32 SlotId)
 	{
 		Positions.SetNum(SlotId + 1);
 		Rotations.SetNum(SlotId + 1);
+		Velocities.SetNum(SlotId + 1);
+		Falling.SetNum(SlotId + 1);
 	}
 }

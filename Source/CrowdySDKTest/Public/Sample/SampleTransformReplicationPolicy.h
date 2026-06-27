@@ -32,5 +32,10 @@ private:
 	TArray<TInterpolatedField<FVector>> Positions;
 	TArray<TInterpolatedField<FRotator>> Rotations;
 
+	// Anim inputs are latched (latest-wins), not interpolated: the AnimBP's own
+	// blendspaces smooth them, and a stale value self-heals on the next snapshot.
+	TArray<FVector> Velocities;
+	TArray<bool> Falling;
+
 	void EnsureSlot(int32 SlotId);
 };
