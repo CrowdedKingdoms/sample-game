@@ -16,7 +16,7 @@ void ASampleHostSwitch::Interact_Implementation(APawn* Interactor)
 {
 	// The host is a convention, not an enforced server role; this check just asks the
 	// SDK whether the local client is currently the elected host.
-	if (!UCrowdyUtilities::CrowdyHasAuthority(this))
+	if (!UCrowdyUtilities::GetCrowdyHasAuthority(this))
 	{
 		UE_LOG(LogCrowdySample, Log, TEXT("Not the host; ignoring the world-spawn request."));
 		return;
