@@ -102,6 +102,36 @@ Key source files:
 | `Sample/SampleMimicEntity.*` | Invisible mirror-source entity (puppeteer) |
 | `Sample/SampleBlueprintHelpers.*` | BP bridges for struct type literals and proxy class registration |
 
+## SDK changelog
+
+This project bundles **CrowdySDK 2.1.0** (in `Plugins/CrowdySDK/`), a large additive release on
+the 2.0 base. The features below are already compiled into the SDK copy here, but the example
+switches above do **not** demonstrate them yet -- that update is still to come. Until then, see
+the [SDK docs](https://docs.crowdedkingdoms.com/unreal-sdk/intro) for how to use them.
+
+**New in 2.1.0**
+
+- **Crowdy State** -- direct property replication. Mark a `UPROPERTY` or a Blueprint variable
+  `meta=(CrowdyState)` and the owning client replicates just that value, with no executor or
+  snapshot struct. A third replication path alongside Actor State and Event RPCs.
+- **Replicated subsystems** -- a host-owned UE Subsystem can join both view planes (Crowdy State
+  and CrowdyEvents) without being an actor.
+- **Host authority and ownership** -- new `Ownership` / `HostOverride` / `StateHeartbeat` fields
+  on `UCrowdyEntityComponent`, an explicit request/grant ownership-transfer flow, a
+  server-validated host check, and client-side helpers (`DoesCrowdyEntityOwn`,
+  `IsCrowdyEntityHost`, `GetCrowdyEntityComponent`).
+
+**Breaking changes in 2.1.0**
+
+- `UCrowdyUtilities::CrowdyHasAuthority` (the pure "am I the host" bool) is renamed to
+  **`GetCrowdyHasAuthority`**; the old name is now the exec/branch node ("Switch Crowdy Has
+  Authority").
+- `ECrowdyDecayRate` dropped the non-functional `Linear_100` value (it aliased `Linear_50`).
+- CrowdyEvent parameters that bury a container inside a struct are now rejected at registration,
+  and the set/map parameter wire format changed, so all peers must run a matching build.
+
+Full details are in the [SDK changelog](https://docs.crowdedkingdoms.com/releases/intro).
+
 ## For Further reading, troubleshooting, support or reporting bugs
 - [Crowded Kingdoms Documentation](https://docs.crowdedkingdoms.com/)
 - [CrowdySDK Documentation](https://docs.crowdedkingdoms.com/unreal-sdk/intro)
@@ -113,6 +143,5 @@ The CrowdySDK v2.0 provides a big leap in terms of usability with Unreak Engine 
 You can provide feedback and suggestions on our [Discord](https://discord.gg/crowdedkingdoms).
 With that said, we are currently working hard on bringing new features to the SDK that include:
 - Mass Entity Based RPCs, this can act as a direct replacement for the Actor Pool System and the default rendering backend.
-- Crowdy State which would allow us to do direct property replication
 - Game Model integration, which allows us to have server-authoritative game logic
 - Developer and Designer friendly tools which help with authoring and debugging
